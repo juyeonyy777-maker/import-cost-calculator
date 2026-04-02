@@ -25,12 +25,12 @@ function RTh({ children, className = '', style = {}, minWidth = 50, initialWidth
     document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
   }, [minWidth]);
   const s = { ...style, position: 'relative' };
-  if (initialWidth) { s.width = initialWidth; s.minWidth = initialWidth; }
+  if (initialWidth) { s.width = initialWidth; }
   return (
     <th ref={ref} className={className} style={s} {...props}>
       {children}
-      <div onMouseDown={onDown} style={{ position:'absolute', right:0, top:0, bottom:0, width:'4px', cursor:'col-resize', userSelect:'none', background:'#cbd5e1', borderRadius:'2px' }}
-        onMouseOver={e => e.currentTarget.style.background='#94a3b8'} onMouseOut={e => e.currentTarget.style.background='#cbd5e1'} />
+      <div onMouseDown={onDown} style={{ position:'absolute', right:0, top:0, bottom:0, width:'6px', cursor:'col-resize', userSelect:'none', background:'#cbd5e1', borderRadius:'2px' }}
+        onMouseOver={e => { e.currentTarget.style.background = '#94a3b8'; }} onMouseOut={e => { e.currentTarget.style.background = '#cbd5e1'; }} />
     </th>
   );
 }
@@ -49,6 +49,7 @@ export default function Home() {
   const [parsedInfo, setParsedInfo] = useState(null);
   const [yuanMap, setYuanMap] = useState({});
   const [skuAvgCost, setSkuAvgCost] = useState({});
+  const [skuShipCount, setSkuShipCount] = useState({});
   const [recent5, setRecent5] = useState(null);
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState(null);
@@ -61,7 +62,6 @@ export default function Home() {
   const classifyAndSet = async (files) => {
     for (const f of files) {
       const name = f.name.toLowerCase();
-      // ZIP 자동 해제
       if (name.endsWith('.zip')) {
         try {
           const JSZip = (await import('jszip')).default;
@@ -101,19 +101,16 @@ export default function Home() {
       if (!res.ok) { setError(data.error || '계산 오류'); return; }
 
       setResult(data.data); setParsedInfo(data.parsed);
-      setYuanMap(data.yuanMap || {}); setSkuAvgCost(data.skuAvgCost || {}); setRecent5(data.recent5AvgRatio);
+      setYuanMap(data.yuanMap || {}); setSkuAvgCost(data.skuAvgCost || {}); setSkuShipCount(data.skuShipCount || {}); setRecent5(data.recent5AvgRatio);
 
-      // 박스수량 검증
       const bE = data.parsed?.excel?.boxCount || data.parsed?.excel?.boxCount2 || 0;
       const bI = data.parsed?.invoice?.packages || 0;
       if (bI > 0 && bE > 0 && bI !== bE) { alert(`박스수량 불일치!\n청구서: ${bI}CTN / 출고내역: ${bE}상자`); setResult(null); setParsedInfo(null); return; }
 
-      // B/L NO 비교
       const invBl = data.parsed?.invoice?.blNo || '';
       const declBl = data.parsed?.declaration?.blNo || '';
       if (invBl && declBl && invBl !== declBl) { alert(`B/L NO 불일치!\n청구서: ${invBl}\n정산서: ${declBl}`); setResult(null); setParsedInfo(null); return; }
 
-      // 자동 저장
       const code = data.parsed?.excel?.shipmentCode || '';
       const bc = data.parsed?.excel?.boxCount || data.parsed?.excel?.boxCount2 || 0;
       const shipKey = code ? code + '-' + bc + '박스' : '';
@@ -184,29 +181,29 @@ export default function Home() {
   const handleReset = () => {
     sendLog(userName, '초기화', '');
     setExcelFile(null); setExcelFile2(null); setInvoiceFile(null);
-    setResult(null); setError(''); setParsedInfo(null); setYuanMap({}); setSkuAvgCost({}); setRecent5(null);
+    setResult(null); setError(''); setParsedInfo(null); setYuanMap({}); setSkuAvgCost({}); setSkuShipCount({}); setRecent5(null);
     document.querySelectorAll('input[type="file"]').forEach(i => { i.value = ''; });
   };
 
   /* ═══════════════ 이름 입력 화면 ═══════════════ */
   if (!nameOk) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="bg-white rounded-2xl shadow-xl border p-10 w-full max-w-sm text-center">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-white text-2xl font-black">IC</span>
+      <div className="min-h-screen flex items-center justify-center bg-[#f5f6fa]">
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-10 w-full max-w-sm text-center">
+          <div className="w-14 h-14 bg-[#1a2332] rounded-xl flex items-center justify-center mx-auto mb-5">
+            <span className="text-white text-lg font-bold tracking-tight">IC</span>
           </div>
-          <h1 className="text-2xl font-extrabold text-gray-900 mb-1">수입원가 계산기</h1>
+          <h1 className="text-xl font-bold text-[#1a2332] mb-1">수입원가 계산기</h1>
           <p className="text-sm text-gray-400 mb-8">이름을 입력하세요</p>
           <input type="text" placeholder="이름" value={userName}
             onChange={e => setUserName(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && userName.trim()) { localStorage.setItem('userName', userName.trim()); sendLog(userName.trim(), '로그인', ''); setNameOk(true); } }}
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-center text-lg focus:outline-none focus:border-blue-500 transition-colors mb-4" autoFocus />
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-center text-base focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors mb-4" autoFocus />
           <button onClick={() => { if (userName.trim()) { localStorage.setItem('userName', userName.trim()); sendLog(userName.trim(), '로그인', ''); setNameOk(true); } }}
-            disabled={!userName.trim()} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-lg hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 transition-colors">
+            disabled={!userName.trim()} className="w-full py-3 bg-[#3b82f6] text-white rounded-lg font-semibold text-base hover:bg-[#2563eb] disabled:bg-gray-200 disabled:text-gray-400 transition-colors">
             시작하기
           </button>
-          <button onClick={() => window.open('/guide', '_blank')} className="w-full mt-3 py-2.5 text-sm text-gray-500 hover:text-blue-600 transition-colors">사용방법 보기</button>
+          <button onClick={() => window.open('/guide', '_blank')} className="w-full mt-3 py-2.5 bg-[#f5f6fa] text-[#1a2332] border border-gray-300 rounded-lg font-semibold text-sm hover:bg-gray-100 transition-colors">사용방법 보기</button>
         </div>
       </div>
     );
@@ -259,7 +256,6 @@ export default function Home() {
     });
   }
 
-  // 합계 계산
   const costSums = {};
   for (const col of COST_COLS) costSums[col.key] = rows.reduce((s, r) => s + ((r.costs?.[col.key]?.perUnit || 0) * r.shippedQty), 0);
   const allocTotal = COST_COLS.reduce((s, col) => s + costSums[col.key], 0);
@@ -269,282 +265,309 @@ export default function Home() {
   const calcCny = rows.reduce((s, r) => s + r.unitPriceCny * r.shippedQty, 0);
   const cnyDiff = calcCny - excelCny;
 
-  const thBase = 'px-3 py-2.5 text-center font-bold whitespace-nowrap';
+  const shipLabel = (parsedInfo?.excel?.shipmentCode || '') + (parsedInfo?.excel?.boxCount ? '-' + parsedInfo.excel.boxCount + '박스' : parsedInfo?.excel?.boxCount2 ? '-' + parsedInfo.excel.boxCount2 + '박스' : '');
+  const thBase = 'px-3 py-2.5 text-center font-semibold whitespace-nowrap text-sm';
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* ── 상단 네비게이션 ── */}
-      <nav className="bg-white border-b shadow-sm sticky top-0 z-50">
-        <div className="max-w-full mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center"><span className="text-white text-xs font-black">IC</span></div>
-            <h1 className="text-lg font-extrabold text-gray-900">수입원가 계산기</h1>
+    <div className="min-h-screen bg-[#f5f6fa] flex">
+      {/* ── 사이드바 ── */}
+      <aside className="w-[200px] bg-[#1a2332] min-h-screen flex-shrink-0 flex flex-col fixed top-0 left-0 h-screen z-50">
+        <div className="px-5 py-5 flex items-center gap-2.5 border-b border-[#2a3a52]">
+          <div className="w-7 h-7 bg-[#3b82f6] rounded-lg flex items-center justify-center">
+            <span className="text-white text-[10px] font-bold">IC</span>
           </div>
-          <div className="flex items-center gap-2">
-            {!result && <>
-              <button onClick={() => window.open('/data', '_blank')} className="px-3 py-1.5 text-xs font-bold bg-teal-50 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors">전체 데이터</button>
-              <button onClick={() => window.open('/ratio', '_blank')} className="px-3 py-1.5 text-xs font-bold bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors">비율 평균</button>
-            </>}
-            <button onClick={() => window.open('/logs', '_blank')} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors">로그</button>
-            <span className="text-sm text-gray-500 ml-2">{userName}님</span>
-            <button onClick={() => { localStorage.removeItem('userName'); setUserName(''); setNameOk(false); }}
-              className="text-xs text-gray-400 hover:text-red-500 transition-colors">변경</button>
-          </div>
+          <span className="text-white font-bold text-sm">수입원가 계산기</span>
         </div>
-      </nav>
-
-      <div className="max-w-full mx-auto px-6 py-6">
-
-        {/* ═══ 파일 업로드 (결과 없을 때) ═══ */}
-        {!result && (
-          <div className="max-w-4xl mx-auto mb-4 flex gap-3">
-            <button onClick={() => window.open('/data', '_blank')}
-              className="px-5 py-2.5 bg-teal-600 text-white rounded-xl font-bold text-sm hover:bg-teal-700 transition-colors shadow-sm">
-              전체 데이터 조회
-            </button>
-            <button onClick={() => window.open('/ratio', '_blank')}
-              className="px-5 py-2.5 bg-red-600 text-white rounded-xl font-bold text-sm hover:bg-red-700 transition-colors shadow-sm">
-              환율 비율 평균
-            </button>
+        <nav className="flex-1 px-3 py-4 space-y-0.5">
+          <div className="bg-[#253347] text-blue-400 rounded-lg px-3 py-2.5 text-sm font-semibold flex items-center gap-2.5 cursor-default">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+            원가 계산기
           </div>
-        )}
-        {!result && (
-          <div className="bg-white rounded-2xl shadow-sm border p-8 mb-6 max-w-4xl mx-auto">
-            <h2 className="text-xl font-bold text-gray-900 mb-5">파일 업로드</h2>
-
-            {/* 통합 드래그앤드롭 */}
-            <div
-              className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all mb-6 ${
-                (excelFile && excelFile2 && invoiceFile) ? 'border-green-400 bg-green-50/50' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50/30'
-              }`}
-              onClick={() => dropRef.current?.click()}
-              onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
-              onDrop={e => { e.preventDefault(); e.stopPropagation(); classifyAndSet(e.dataTransfer.files); }}
-            >
-              <input ref={dropRef} type="file" accept=".xlsx,.xls,.pdf,.zip" multiple className="hidden"
-                onChange={e => { classifyAndSet(e.target.files); e.target.value = ''; }} />
-              <div className="mb-6">
-                <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                  <span className="text-3xl text-blue-500">+</span>
-                </div>
-                <p className="font-bold text-xl text-gray-700">파일을 드래그하거나 클릭하세요</p>
-                <p className="text-sm text-gray-400 mt-1">엑셀 + PDF 또는 ZIP 파일 (자동 분류)</p>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                {[
-                  { label: '결제명세서', file: excelFile, req: true },
-                  { label: '출고내역', file: excelFile2, req: true },
-                  { label: '청구서', file: invoiceFile, req: true },
-                ].map(({ label, file, req }) => (
-                  <div key={label} className={`rounded-xl p-4 transition-all ${file ? 'bg-green-100 border-2 border-green-400' : 'bg-gray-100 border-2 border-gray-200'}`}>
-                    <p className={`font-bold ${file ? 'text-green-700' : 'text-gray-600'}`}>{label}</p>
-                    <p className={`text-xs mt-1 truncate ${file ? 'text-green-600' : req ? 'text-red-400 font-bold' : 'text-gray-400'}`}>{file ? file.name : '필수'}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-6 text-sm whitespace-pre-line">{error}</div>}
-
-            <div className="flex gap-3">
-              <button onClick={handleCalc} disabled={loading}
-                className="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold text-base hover:bg-blue-700 disabled:bg-gray-300 transition-colors shadow-sm">
-                {loading ? '계산 중...' : '원가 계산'}
+          {!result && (
+            <>
+              <button onClick={() => window.open('/data', '_blank')} className="w-full text-left text-gray-400 hover:text-white hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" /></svg>
+                전체 데이터 조회
               </button>
-              <button onClick={handleReset} className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-medium hover:bg-gray-200 transition-colors">초기화</button>
+            </>
+          )}
+          <button onClick={() => window.open('/cost-check', '_blank')} className="w-full text-left text-gray-400 hover:text-white hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+            원가 이상치
+          </button>
+          <button onClick={() => window.open('/logs', '_blank')} className="w-full text-left text-gray-400 hover:text-white hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            로그
+          </button>
+        </nav>
+      </aside>
+
+      {/* ── 메인 콘텐츠 ── */}
+      <main className="flex-1 ml-[200px] min-w-0">
+        {/* 상단 헤더 */}
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+          <div className="px-8 h-12 flex items-center justify-between">
+            <h2 className="text-base font-bold text-[#1a2332]">
+              {result ? '계산 결과' : '원가 계산'}
+            </h2>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-400">{new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-[#1a2332]">{userName}님</span>
+                <button onClick={() => { localStorage.removeItem('userName'); setUserName(''); setNameOk(false); }}
+                  className="text-xs text-gray-400 hover:text-red-500 transition-colors">변경</button>
+              </div>
             </div>
           </div>
-        )}
+        </header>
 
-        {/* ═══ 결과 화면 ═══ */}
-        {result && (
-          <>
-            {/* 비용 요약 */}
-            <div className="bg-white rounded-2xl shadow-sm border p-6 mb-5">
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-3">
-                  <h2 className="text-xl font-bold text-gray-900">비용 요약</h2>
-                  {parsedInfo?.excel?.shipmentCode && (
-                    <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-bold">
-                      {parsedInfo.excel.shipmentCode}-{parsedInfo.excel.boxCount || parsedInfo.excel.boxCount2 || 0}박스
-                    </span>
-                  )}
+        <div className="px-8 py-6">
+
+          {/* ═══ 파일 업로드 (결과 없을 때) ═══ */}
+          {!result && (
+            <div className="bg-white rounded-xl border border-gray-200 p-8 mb-6 max-w-4xl">
+              <h3 className="text-base font-bold text-[#1a2332] mb-5 flex items-center gap-2">
+                <span className="w-5 h-5 bg-blue-100 text-blue-600 rounded flex items-center justify-center text-xs font-bold">1</span>
+                서류 업로드
+              </h3>
+
+              {/* 통합 드래그앤드롭 */}
+              <div
+                className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-all mb-6 ${
+                  (excelFile && excelFile2 && invoiceFile) ? 'border-green-300 bg-green-50/30' : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/20'
+                }`}
+                onClick={() => dropRef.current?.click()}
+                onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+                onDrop={e => { e.preventDefault(); e.stopPropagation(); classifyAndSet(e.dataTransfer.files); }}
+              >
+                <input ref={dropRef} type="file" accept=".xlsx,.xls,.pdf,.zip" multiple className="hidden"
+                  onChange={e => { classifyAndSet(e.target.files); e.target.value = ''; }} />
+                <div className="mb-8">
+                  <div className="w-16 h-16 bg-[#f5f6fa] rounded-xl flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                  </div>
+                  <p className="font-semibold text-base text-gray-700">파일을 드래그하거나 클릭하세요</p>
+                  <p className="text-sm text-gray-400 mt-1">엑셀 + PDF 또는 ZIP 파일 (자동 분류)</p>
+                </div>
+                <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto">
+                  {[
+                    { label: '결제명세서', file: excelFile, req: true },
+                    { label: '출고내역', file: excelFile2, req: true },
+                    { label: '청구서', file: invoiceFile, req: true },
+                  ].map(({ label, file, req }) => (
+                    <div key={label} className={`rounded-lg p-3 transition-all ${file ? 'bg-green-50 border border-green-300' : 'bg-gray-50 border border-gray-200'}`}>
+                      <p className={`font-semibold text-sm ${file ? 'text-green-700' : 'text-gray-600'}`}>{label}</p>
+                      <p className={`text-xs mt-1 truncate ${file ? 'text-green-500' : req ? 'text-red-400 font-semibold' : 'text-gray-400'}`}>{file ? file.name : '필수'}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              {/* 최근5건 평균비율 */}
-              {recent5 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5">
-                  <div className="flex items-center gap-3 mb-1">
-                    <span className="font-bold text-gray-700">최근5건 평균비율</span>
-                    <span className="font-extrabold text-red-600 text-2xl">{recent5.avg}</span>
-                    <button onClick={() => window.open('/ratio', '_blank')} className="px-2 py-1 bg-red-100 text-red-600 rounded text-xs font-bold hover:bg-red-200">전체보기</button>
+              {error && <div className="bg-red-50 border border-red-200 text-red-600 rounded-lg p-4 mb-6 text-sm whitespace-pre-line">{error}</div>}
+
+              <div className="flex gap-3">
+                <button onClick={handleCalc} disabled={loading}
+                  className="px-6 py-2.5 bg-[#3b82f6] text-white rounded-lg font-semibold text-sm hover:bg-[#2563eb] disabled:bg-gray-200 disabled:text-gray-400 transition-colors">
+                  {loading ? '계산 중...' : '원가 계산'}
+                </button>
+                <button onClick={handleReset} className="px-5 py-2.5 bg-white text-gray-500 border border-gray-300 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors">초기화</button>
+              </div>
+            </div>
+          )}
+
+          {/* ═══ 결과 화면 ═══ */}
+          {result && (
+            <>
+              {/* 비용 요약 */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6 mb-5">
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-base font-bold text-[#1a2332]">비용 요약</h3>
+                    {parsedInfo?.excel?.shipmentCode && (
+                      <span className="px-2.5 py-1 bg-blue-50 text-blue-600 rounded-md text-xs font-semibold border border-blue-100">
+                        {parsedInfo.excel.shipmentCode}-{parsedInfo.excel.boxCount || parsedInfo.excel.boxCount2 || 0}박스
+                      </span>
+                    )}
                   </div>
-                  {recent5.detail && (
-                    <div className="flex gap-4 text-xs text-gray-500">
-                      {recent5.detail.map(d => <span key={d.key}>{d.key}: <b className="text-gray-700">{d.avg}</b></span>)}
+                </div>
+
+                {/* 최근5건 평균비율 */}
+                {recent5 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-5">
+                    <div className="flex items-center gap-3 mb-1">
+                      <span className="font-semibold text-base text-gray-700">최근5건 평균비율</span>
+                      <span className="font-bold text-red-600 text-2xl">{recent5.avg}</span>
+                      <button onClick={() => window.open('/ratio', '_blank')} className="px-2 py-1 bg-red-50 text-red-500 rounded text-xs font-semibold hover:bg-red-100 border border-red-200">전체보기</button>
+                    </div>
+                    {recent5.detail && (
+                      <div className="flex gap-4 text-sm text-gray-500">
+                        {recent5.detail.map(d => <span key={d.key}>{d.key}: <b className="text-gray-700">{d.avg}</b></span>)}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 숫자 카드 */}
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                  <div className="bg-[#f5f6fa] rounded-lg p-4 border border-gray-100">
+                    <p className="text-sm font-semibold text-blue-600 mb-1">총 수입원가</p>
+                    <p className="text-2xl font-bold text-[#1a2332]">{fmt(
+                      result.results.reduce((s, r) => s + r.productCostKrw * r.shippedQty, 0)
+                      + Math.round((0.7 * result.summary.totalQty + result.results.reduce((s, r) => s + (r.commission || 0) * r.shippedQty, 0)) * (result.summary.exchangeRateCNY || 195))
+                      + (parsedInfo?.invoice?.totalAmount || 0)
+                    )}<span className="text-sm ml-0.5 text-gray-500">원</span></p>
+                  </div>
+                  <div className="bg-[#f5f6fa] rounded-lg p-4 border border-gray-100">
+                    <p className="text-sm font-semibold text-pink-600 mb-1">1. 총 제품비(CNY)</p>
+                    <p className="text-xl font-bold text-[#1a2332]">{Math.round(((parsedInfo?.excel?.totals?.totalAmount || 0) + (parsedInfo?.excel?.totals?.totalShipping || 0)) * 100) / 100} <span className="text-sm text-gray-500">CNY</span></p>
+                    <p className="text-base font-semibold text-gray-600">= {fmt(result.results.reduce((s, r) => s + r.productCostKrw * r.shippedQty, 0))}원</p>
+                  </div>
+                  <div className="bg-[#f5f6fa] rounded-lg p-4 border border-gray-100">
+                    <p className="text-sm font-semibold text-purple-600 mb-1">2. 총 수수료(CNY)</p>
+                    <p className="text-xl font-bold text-[#1a2332]">{Math.round((0.7 * result.summary.totalQty + result.results.reduce((s, r) => s + (r.commission || 0) * r.shippedQty, 0)) * 100) / 100} <span className="text-sm text-gray-500">CNY</span></p>
+                    <p className="text-base font-semibold text-gray-600">= {fmt(Math.round((0.7 * result.summary.totalQty + result.results.reduce((s, r) => s + (r.commission || 0) * r.shippedQty, 0)) * (result.summary.exchangeRateCNY || 195)))}원</p>
+                    <p className="text-sm text-gray-400 mt-0.5">SOP {Math.round(0.7 * result.summary.totalQty * 100) / 100} CNY</p>
+                    <p className="text-sm text-gray-400">수수료7% {Math.round(result.results.reduce((s, r) => s + (r.commission || 0) * r.shippedQty, 0) * 100) / 100} CNY</p>
+                  </div>
+                  <div className="bg-[#f5f6fa] rounded-lg p-4 border border-gray-100">
+                    <p className="text-sm font-semibold text-orange-600 mb-1">3. 총 부대비용</p>
+                    <p className="text-xl font-bold text-[#1a2332]">{fmt(invoiceTotal)}<span className="text-sm ml-0.5 text-gray-500">원</span></p>
+                  </div>
+                  <div className="bg-[#f5f6fa] rounded-lg p-4 border border-gray-100">
+                    <p className="text-sm font-semibold text-gray-500 mb-1">총 수량</p>
+                    <p className="text-xl font-bold text-[#1a2332]">{fmt(result.summary.totalQty)}<span className="text-sm ml-0.5 text-gray-500">개</span></p>
+                  </div>
+                  <div className="bg-[#f5f6fa] rounded-lg p-4 border border-gray-100">
+                    <p className="text-sm font-semibold text-gray-500 mb-1">전체 CBM</p>
+                    <p className="text-xl font-bold text-[#1a2332]">{Math.round((result.summary.totalCbm || 0) * 10000) / 10000}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* ═══ SKU별 테이블 ═══ */}
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                {/* 오차 표시 바 */}
+                <div className="px-5 py-2.5 bg-[#f5f6fa] flex flex-col items-end gap-1 text-sm">
+                  {invoiceTotal > 0 && (
+                    <div className="flex items-center gap-6">
+                      <span className="text-gray-500">청구서 <b className="text-[#1a2332]">{fmt(invoiceTotal)}원</b></span>
+                      <span className="text-gray-500">배분합 <b className="text-[#1a2332]">{fmt(allocTotal)}원</b></span>
+                      <span className={`font-bold ${allocDiff >= 0 ? 'text-blue-600' : 'text-red-500'}`}>오차 {allocDiff >= 0 ? '+' : ''}{fmt(allocDiff)}원</span>
+                    </div>
+                  )}
+                  {excelCny > 0 && (
+                    <div className="flex items-center gap-6">
+                      <span className="text-gray-500">출고내역 <b className="text-[#1a2332]">{Math.round(excelCny * 100) / 100} CNY</b></span>
+                      <span className="text-gray-500">계산기 <b className="text-[#1a2332]">{Math.round(calcCny * 100) / 100} CNY</b></span>
+                      <span className={`font-bold ${cnyDiff >= 0 ? 'text-blue-600' : 'text-red-500'}`}>오차 {cnyDiff >= 0 ? '+' : ''}{Math.round(cnyDiff * 100) / 100} CNY</span>
                     </div>
                   )}
                 </div>
-              )}
 
-              {/* 숫자 카드 */}
-              <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-                <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
-                  <p className="text-base font-bold text-blue-600 mb-1">총 수입원가</p>
-                  <p className="text-2xl font-extrabold text-blue-700">{fmt(
-                    result.results.reduce((s, r) => s + r.productCostKrw * r.shippedQty, 0)
-                    + Math.round((0.7 * result.summary.totalQty + result.results.reduce((s, r) => s + (r.commission || 0) * r.shippedQty, 0)) * (result.summary.exchangeRateCNY || 195))
-                    + (parsedInfo?.invoice?.totalAmount || 0)
-                  )}<span className="text-sm ml-0.5">원</span></p>
+                <div className="px-5 py-2.5 border-t border-b border-gray-200 flex items-center gap-2">
+                  <button onClick={handleDownloadSku} className="px-3 py-1.5 bg-[#3b82f6] text-white rounded-md text-xs font-semibold hover:bg-[#2563eb] transition-colors">전체 EXCEL 다운</button>
+                  <button onClick={() => window.open('/logic', '_blank')} className="px-3 py-1.5 bg-white text-gray-600 border border-gray-300 rounded-md text-xs font-semibold hover:bg-gray-50 transition-colors">컬럼 로직</button>
+                  <button onClick={() => window.open('/data', '_blank')} className="px-3 py-1.5 bg-white text-gray-600 border border-gray-300 rounded-md text-xs font-semibold hover:bg-gray-50 transition-colors">전체 데이터 조회</button>
                 </div>
-                <div className="bg-pink-50 rounded-xl p-4 border border-pink-100">
-                  <p className="text-base font-bold text-pink-600 mb-1">1. 총 제품비(CNY)</p>
-                  <p className="text-xl font-bold">{Math.round(((parsedInfo?.excel?.totals?.totalAmount || 0) + (parsedInfo?.excel?.totals?.totalShipping || 0)) * 100) / 100} <span className="text-xs">CNY</span></p>
-                  <p className="text-base font-bold text-gray-700">= {fmt(result.results.reduce((s, r) => s + r.productCostKrw * r.shippedQty, 0))}원</p>
-                </div>
-                <div className="bg-purple-50 rounded-xl p-4 border border-purple-100">
-                  <p className="text-base font-bold text-purple-600 mb-1">2. 총 수수료(CNY)</p>
-                  <p className="text-xl font-bold">{Math.round((0.7 * result.summary.totalQty + result.results.reduce((s, r) => s + (r.commission || 0) * r.shippedQty, 0)) * 100) / 100} <span className="text-xs">CNY</span></p>
-                  <p className="text-base font-bold text-gray-700">= {fmt(Math.round((0.7 * result.summary.totalQty + result.results.reduce((s, r) => s + (r.commission || 0) * r.shippedQty, 0)) * (result.summary.exchangeRateCNY || 195)))}원</p>
-                  <p className="text-sm font-medium text-gray-500">SOP {Math.round(0.7 * result.summary.totalQty * 100) / 100} CNY</p>
-                  <p className="text-sm font-medium text-gray-500">수수료7% {Math.round(result.results.reduce((s, r) => s + (r.commission || 0) * r.shippedQty, 0) * 100) / 100} CNY</p>
-                </div>
-                <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
-                  <p className="text-base font-bold text-orange-600 mb-1">3. 총 부대비용</p>
-                  <p className="text-xl font-bold">{fmt(invoiceTotal)}<span className="text-xs ml-0.5">원</span></p>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                  <p className="text-base font-bold text-gray-700 mb-1">총 수량</p>
-                  <p className="text-xl font-bold">{fmt(result.summary.totalQty)}<span className="text-xs ml-0.5">개</span></p>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                  <p className="text-base font-bold text-gray-700 mb-1">전체 CBM</p>
-                  <p className="text-xl font-bold">{Math.round((result.summary.totalCbm || 0) * 10000) / 10000}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* ═══ SKU별 테이블 ═══ */}
-            <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-              {/* 오차 표시 바 */}
-              <div className="px-5 py-3 bg-gray-50 flex flex-col items-end gap-1 text-sm">
-                {invoiceTotal > 0 && (
-                  <div className="flex items-center gap-6">
-                    <span>청구서 <b className="text-gray-900">{fmt(invoiceTotal)}원</b></span>
-                    <span>배분합 <b className="text-gray-900">{fmt(allocTotal)}원</b></span>
-                    <span className={`font-extrabold ${allocDiff >= 0 ? 'text-blue-600' : 'text-red-600'}`}>오차 {allocDiff >= 0 ? '+' : ''}{fmt(allocDiff)}원</span>
-                  </div>
-                )}
-                {excelCny > 0 && (
-                  <div className="flex items-center gap-6">
-                    <span>출고내역 <b className="text-gray-900">{Math.round(excelCny * 100) / 100} CNY</b></span>
-                    <span>계산기 <b className="text-gray-900">{Math.round(calcCny * 100) / 100} CNY</b></span>
-                    <span className={`font-extrabold ${cnyDiff >= 0 ? 'text-blue-600' : 'text-red-600'}`}>오차 {cnyDiff >= 0 ? '+' : ''}{Math.round(cnyDiff * 100) / 100} CNY</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="px-5 py-3 border-t border-b border-gray-200 flex items-center gap-2">
-                <button onClick={handleDownloadSku} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-colors">전체 EXCEL 다운</button>
-                <button onClick={() => window.open('/logic', '_blank')} className="px-4 py-2 bg-indigo-500 text-white rounded-lg text-sm font-bold hover:bg-indigo-600 transition-colors">컬럼 로직</button>
-                <button onClick={() => window.open('/data', '_blank')} className="px-4 py-2 bg-teal-500 text-white rounded-lg text-sm font-bold hover:bg-teal-600 transition-colors">전체 데이터 조회</button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="text-sm" style={{ tableLayout: 'fixed', minWidth: '100%' }}>
-                  <thead className="bg-gray-100 border-t border-gray-300">
-                    <tr>
-                      <RTh className={`${thBase} sticky left-0 bg-gray-100 z-10 cursor-pointer hover:text-blue-600`} initialWidth="140px" onClick={() => handleSort('sku')}>SKU{sortIcon('sku')}</RTh>
-                      <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="75px" onClick={() => handleSort('cbmPerUnit')}>개당CBM{sortIcon('cbmPerUnit')}</RTh>
-                      <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="280px" onClick={() => handleSort('productName')}>품명{sortIcon('productName')}</RTh>
-                      <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="65px" onClick={() => handleSort('shippedQty')}>수량{sortIcon('shippedQty')}</RTh>
-                      <RTh className={`${thBase} bg-pink-50 cursor-pointer hover:text-blue-600`} initialWidth="90px" onClick={() => handleSort('unitPriceCny')}>단가(CNY){sortIcon('unitPriceCny')}</RTh>
-                      <RTh className={`${thBase} bg-pink-50`} initialWidth="85px">후불0.7</RTh>
-                      <RTh className={`${thBase} bg-pink-50 cursor-pointer hover:text-blue-600`} initialWidth="80px" onClick={() => handleSort('commission')}>수수료7%{sortIcon('commission')}</RTh>
-                      <RTh className={`${thBase} bg-yellow-100 cursor-pointer hover:text-blue-600`} initialWidth="100px" onClick={() => handleSort('costPerUnit')}>원가(개당){sortIcon('costPerUnit')}</RTh>
-                      <RTh className={`${thBase} bg-purple-50 cursor-pointer hover:text-blue-600`} initialWidth="95px" onClick={() => handleSort('avgCost')}>평균원가{sortIcon('avgCost')}</RTh>
-                      <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="90px" onClick={() => handleSort('ratio')}>위안화비율{sortIcon('ratio')}</RTh>
-                      <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="95px" onClick={() => handleSort('costX285')}>원가(x285){sortIcon('costX285')}</RTh>
-                      <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="80px" onClick={() => handleSort('costDiff')}>차이{sortIcon('costDiff')}</RTh>
-                      {COST_COLS.map(c => <RTh key={c.key} className={`${thBase} bg-sky-50 cursor-pointer hover:text-blue-600`} initialWidth="90px" onClick={() => handleSort('cost_' + c.key)}>{c.label}{sortIcon('cost_' + c.key)}</RTh>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {/* 실제 비용 행 */}
-                    <tr className="border-b border-gray-300 font-semibold bg-lime-50">
-                      <td className="px-3 py-2 sticky left-0 bg-lime-50 z-10 font-bold">실제 비용</td>
-                      <td className="px-3 py-2"></td><td className="px-3 py-2"></td><td className="px-3 py-2"></td>
-                      <td className="px-3 py-2"></td><td className="px-3 py-2"></td><td className="px-3 py-2"></td>
-                      <td className="px-3 py-2"></td><td className="px-3 py-2"></td>
-                      <td className="px-3 py-2 text-right text-red-600 font-extrabold whitespace-nowrap">
-                        평균 {(() => { const r = rows.filter(r => r.unitPriceCny > 0).map(r => r.costPerUnit / r.unitPriceCny); return r.length > 0 ? Math.round(r.reduce((a, b) => a + b, 0) / r.length * 100) / 100 : '-'; })()}
-                      </td>
-                      <td className="px-3 py-2"></td>
-                      <td className="px-3 py-2"></td>
-                      {COST_COLS.map(col => {
-                        const c = parsedInfo?.invoice?.costs?.[col.key];
-                        const v = c ? (c.amount || 0) + (c.vatAmount || 0) : 0;
-                        return <td key={col.key} className="px-3 py-2 text-right">{v > 0 ? fmt(v) + '원' : ''}</td>;
+                <div className="overflow-x-auto">
+                  <table className="text-sm" style={{ tableLayout: 'fixed', minWidth: '100%' }}>
+                    <thead className="bg-[#f5f6fa] border-t border-gray-200">
+                      <tr>
+                        <RTh className={`${thBase} sticky left-0 bg-[#f5f6fa] z-10 cursor-pointer hover:text-blue-600`} initialWidth="120px" minWidth={40} onClick={() => handleSort('sku')}>SKU{sortIcon('sku')}</RTh>
+                        <RTh className={`${thBase}`} initialWidth="80px">출고회수</RTh>
+                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="75px" onClick={() => handleSort('cbmPerUnit')}>개당CBM{sortIcon('cbmPerUnit')}</RTh>
+                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="280px" onClick={() => handleSort('productName')}>품명{sortIcon('productName')}</RTh>
+                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="65px" onClick={() => handleSort('shippedQty')}>수량{sortIcon('shippedQty')}</RTh>
+                        <RTh className={`${thBase} bg-pink-50/70 cursor-pointer hover:text-blue-600`} initialWidth="90px" onClick={() => handleSort('unitPriceCny')}>단가(CNY){sortIcon('unitPriceCny')}</RTh>
+                        <RTh className={`${thBase} bg-pink-50/70`} initialWidth="85px">후불0.7</RTh>
+                        <RTh className={`${thBase} bg-pink-50/70 cursor-pointer hover:text-blue-600`} initialWidth="80px" onClick={() => handleSort('commission')}>수수료7%{sortIcon('commission')}</RTh>
+                        <RTh className={`${thBase} bg-amber-50/70 cursor-pointer hover:text-blue-600`} initialWidth="100px" onClick={() => handleSort('costPerUnit')}>원가(개당){sortIcon('costPerUnit')}</RTh>
+                        <RTh className={`${thBase} bg-purple-50/70 cursor-pointer hover:text-blue-600`} initialWidth="95px" onClick={() => handleSort('avgCost')}>평균원가{sortIcon('avgCost')}</RTh>
+                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="90px" onClick={() => handleSort('ratio')}>위안화비율{sortIcon('ratio')}</RTh>
+                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="95px" onClick={() => handleSort('costX285')}>원가(x285){sortIcon('costX285')}</RTh>
+                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="80px" onClick={() => handleSort('costDiff')}>차이{sortIcon('costDiff')}</RTh>
+                        {COST_COLS.map(c => <RTh key={c.key} className={`${thBase} bg-sky-50/70 cursor-pointer hover:text-blue-600`} initialWidth="120px" onClick={() => handleSort('cost_' + c.key)}>{c.label}{sortIcon('cost_' + c.key)}</RTh>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* 실제 비용 행 */}
+                      <tr className="border-b border-gray-200 font-semibold bg-emerald-50/50 text-xs">
+                        <td className="px-3 py-2 sticky left-0 bg-emerald-50/50 z-10 font-bold">실제 비용</td>
+                        <td className="px-3 py-2"></td><td className="px-3 py-2"></td><td className="px-3 py-2"></td><td className="px-3 py-2"></td>
+                        <td className="px-3 py-2"></td><td className="px-3 py-2"></td><td className="px-3 py-2"></td>
+                        <td className="px-3 py-2"></td><td className="px-3 py-2"></td>
+                        <td className="px-3 py-2 text-right text-red-500 font-bold whitespace-nowrap">
+                          평균 {(() => { const r = rows.filter(r => r.unitPriceCny > 0).map(r => r.costPerUnit / r.unitPriceCny); return r.length > 0 ? Math.round(r.reduce((a, b) => a + b, 0) / r.length * 100) / 100 : '-'; })()}
+                        </td>
+                        <td className="px-3 py-2"></td>
+                        <td className="px-3 py-2"></td>
+                        {COST_COLS.map(col => {
+                          const c = parsedInfo?.invoice?.costs?.[col.key];
+                          const v = c ? (c.amount || 0) + (c.vatAmount || 0) : 0;
+                          return <td key={col.key} className="px-3 py-2 text-right">{v > 0 ? fmt(v) + '원' : ''}</td>;
+                        })}
+                      </tr>
+                      {/* 배분 총합 행 */}
+                      <tr className="border-b-2 border-blue-200 font-semibold bg-emerald-50/50 text-xs">
+                        <td className="px-3 py-2 sticky left-0 bg-emerald-50/50 z-10 font-bold">배분 총합</td>
+                        <td className="px-3 py-2"></td>
+                        <td className="px-3 py-2 text-right">{Math.round(rows.reduce((s, r) => s + (r.cbmPerUnit || 0) * r.shippedQty, 0) * 10000) / 10000}</td>
+                        <td className="px-3 py-2"></td>
+                        <td className="px-3 py-2 text-right">{fmt(rows.reduce((s, r) => s + r.shippedQty, 0))}</td>
+                        <td className="px-3 py-2 text-right">{Math.round(rows.reduce((s, r) => s + r.unitPriceCny * r.shippedQty, 0) * 100) / 100}</td>
+                        <td className="px-3 py-2 text-right">{Math.round(rows.reduce((s, r) => s + 0.7 * r.shippedQty, 0) * 100) / 100}</td>
+                        <td className="px-3 py-2 text-right">{Math.round(rows.reduce((s, r) => s + (r.commission || 0) * r.shippedQty, 0) * 100) / 100}</td>
+                        <td className="px-3 py-2 text-right">{fmt(rows.reduce((s, r) => s + r.costPerUnit * r.shippedQty, 0))}원</td>
+                        <td className="px-3 py-2"></td><td className="px-3 py-2"></td>
+                        <td className="px-3 py-2 text-right">{fmt(rows.reduce((s, r) => s + Math.round(r.unitPriceRaw * 285) * r.shippedQty, 0))}원</td>
+                        <td className="px-3 py-2"></td>
+                        {COST_COLS.map(col => {
+                          const c = parsedInfo?.invoice?.costs?.[col.key];
+                          const actual = c ? (c.amount || 0) + (c.vatAmount || 0) : 0;
+                          const d = Math.round(costSums[col.key]) - Math.round(actual);
+                          const clr = actual === 0 || d === 0 ? '' : d > 0 ? 'text-blue-600' : 'text-red-500';
+                          return <td key={col.key} className={`px-3 py-2 text-right ${clr}`}>{fmt(costSums[col.key])}원</td>;
+                        })}
+                      </tr>
+                      {/* SKU 행 */}
+                      {rows.map((r, i) => {
+                        const yv = yuanMap[r.sku];
+                        const yd = yv != null ? Math.abs(r.unitPriceCny - yv) : 0;
+                        const yw = yv != null && yd >= 4;
+                        const ratio = r.unitPriceCny > 0 ? Math.round(r.costPerUnit / r.unitPriceCny * 100) / 100 : '-';
+                        const bg = i % 2 === 0 ? 'bg-white' : 'bg-[#f9fafb]';
+                        return (
+                          <tr key={r.sku} className={`${bg} hover:bg-blue-50/30 transition-colors`}>
+                            <td className={`px-3 py-2 font-mono font-semibold sticky left-0 z-10 ${bg}`} style={{ wordBreak:'break-all' }}>{r.sku}</td>
+                            <td className="px-3 py-2 text-center font-semibold text-gray-700">{skuShipCount[r.sku] || 0}회</td>
+                            <td className="px-3 py-2 text-right">{r.cbmPerUnit}</td>
+                            <td className="px-3 py-2" style={{ wordBreak: 'break-word' }}>{r.productName}</td>
+                            <td className="px-3 py-2 text-right font-semibold">{r.shippedQty}</td>
+                            <td className={`px-3 py-2 text-right font-semibold ${yw ? 'text-red-500 bg-red-50' : ''}`}
+                              title={yv != null ? `위안화 정보: ${yv} (차이: ${(r.unitPriceCny - yv).toFixed(2)})` : ''}>
+                              {r.unitPriceCny}{yw && <span className="text-xs ml-1">({yv})</span>}
+                            </td>
+                            <td className="px-3 py-2 text-right">0.7</td>
+                            <td className="px-3 py-2 text-right">{r.commission || ''}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-blue-700 bg-amber-50/50">{fmt(r.costPerUnit)}원</td>
+                            <td className="px-3 py-2 text-right font-semibold text-purple-700 bg-purple-50/30">{skuAvgCost[r.sku] ? fmt(skuAvgCost[r.sku]) + '원' : '-'}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-[#1a2332]">{ratio}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-[#1a2332]">{fmt(Math.round(r.unitPriceRaw * 285))}원</td>
+                            {(() => { const d = Math.round(r.unitPriceRaw * 285) - (r.costPerUnit || 0); return (
+                              <td className={`px-3 py-2 text-right font-semibold ${d >= 0 ? 'text-blue-600' : 'text-red-500'}`}>{d >= 0 ? '+' : ''}{fmt(d)}원</td>
+                            ); })()}
+                            {COST_COLS.map(col => <td key={col.key} className="px-3 py-2 text-right">{fmt(r.costs?.[col.key]?.perUnit)}원</td>)}
+                          </tr>
+                        );
                       })}
-                    </tr>
-                    {/* 배분 총합 행 */}
-                    <tr className="border-b-2 border-sky-300 font-semibold bg-lime-50">
-                      <td className="px-3 py-2 sticky left-0 bg-lime-50 z-10 font-bold">배분 총합</td>
-                      <td className="px-3 py-2 text-right">{Math.round(rows.reduce((s, r) => s + (r.cbmPerUnit || 0) * r.shippedQty, 0) * 10000) / 10000}</td>
-                      <td className="px-3 py-2"></td>
-                      <td className="px-3 py-2 text-right">{fmt(rows.reduce((s, r) => s + r.shippedQty, 0))}</td>
-                      <td className="px-3 py-2 text-right">{Math.round(rows.reduce((s, r) => s + r.unitPriceCny * r.shippedQty, 0) * 100) / 100}</td>
-                      <td className="px-3 py-2 text-right">{Math.round(rows.reduce((s, r) => s + 0.7 * r.shippedQty, 0) * 100) / 100}</td>
-                      <td className="px-3 py-2 text-right">{Math.round(rows.reduce((s, r) => s + (r.commission || 0) * r.shippedQty, 0) * 100) / 100}</td>
-                      <td className="px-3 py-2 text-right">{fmt(rows.reduce((s, r) => s + r.costPerUnit * r.shippedQty, 0))}원</td>
-                      <td className="px-3 py-2"></td><td className="px-3 py-2"></td>
-                      <td className="px-3 py-2 text-right">{fmt(rows.reduce((s, r) => s + Math.round(r.unitPriceRaw * 285) * r.shippedQty, 0))}원</td>
-                      <td className="px-3 py-2"></td>
-                      {COST_COLS.map(col => {
-                        const c = parsedInfo?.invoice?.costs?.[col.key];
-                        const actual = c ? (c.amount || 0) + (c.vatAmount || 0) : 0;
-                        const d = Math.round(costSums[col.key]) - Math.round(actual);
-                        const clr = actual === 0 || d === 0 ? '' : d > 0 ? 'text-blue-600' : 'text-red-600';
-                        return <td key={col.key} className={`px-3 py-2 text-right ${clr}`}>{fmt(costSums[col.key])}원</td>;
-                      })}
-                    </tr>
-                    {/* SKU 행 */}
-                    {rows.map((r, i) => {
-                      const yv = yuanMap[r.sku];
-                      const yd = yv != null ? Math.abs(r.unitPriceCny - yv) : 0;
-                      const yw = yv != null && yd >= 4;
-                      const ratio = r.unitPriceCny > 0 ? Math.round(r.costPerUnit / r.unitPriceCny * 100) / 100 : '-';
-                      const bg = i % 2 === 0 ? 'bg-white' : 'bg-gray-50';
-                      return (
-                        <tr key={r.sku} className={bg}>
-                          <td className={`px-3 py-2 font-mono text-xs font-bold sticky left-0 z-10 ${bg}`}>{r.sku}</td>
-                          <td className="px-3 py-2 text-right">{r.cbmPerUnit}</td>
-                          <td className="px-3 py-2" style={{ wordBreak: 'break-word' }}>{r.productName}</td>
-                          <td className="px-3 py-2 text-right font-bold">{r.shippedQty}</td>
-                          <td className={`px-3 py-2 text-right font-bold ${yw ? 'text-red-600 bg-red-50' : ''}`}
-                            title={yv != null ? `위안화 정보: ${yv} (차이: ${(r.unitPriceCny - yv).toFixed(2)})` : ''}>
-                            {r.unitPriceCny}{yw && <span className="text-xs ml-1">({yv})</span>}
-                          </td>
-                          <td className="px-3 py-2 text-right">0.7</td>
-                          <td className="px-3 py-2 text-right">{r.commission || ''}</td>
-                          <td className="px-3 py-2 text-right font-bold text-blue-700 bg-yellow-50">{fmt(r.costPerUnit)}원</td>
-                          <td className="px-3 py-2 text-right font-bold text-purple-700 bg-purple-50/50">{skuAvgCost[r.sku] ? fmt(skuAvgCost[r.sku]) + '원' : '-'}</td>
-                          <td className="px-3 py-2 text-right font-bold text-gray-900">{ratio}</td>
-                          <td className="px-3 py-2 text-right font-bold text-gray-900">{fmt(Math.round(r.unitPriceRaw * 285))}원</td>
-                          {(() => { const d = Math.round(r.unitPriceRaw * 285) - (r.costPerUnit || 0); return (
-                            <td className={`px-3 py-2 text-right font-bold ${d >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{d >= 0 ? '+' : ''}{fmt(d)}원</td>
-                          ); })()}
-                          {COST_COLS.map(col => <td key={col.key} className="px-3 py-2 text-right">{fmt(r.costs?.[col.key]?.perUnit)}원</td>)}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          </>
-        )}
-      </div>
+            </>
+          )}
+        </div>
+      </main>
     </div>
   );
 }

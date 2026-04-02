@@ -152,6 +152,7 @@ export async function POST(request) {
 
     // SKU별 평균 원가 + 최근 5건 평균 비율
     let skuAvgCost = {};
+    let skuShipCount = {};
     let recent5AvgRatio = null;
     try {
       if (fs.existsSync(PATHS.allData)) {
@@ -159,11 +160,16 @@ export async function POST(request) {
         const skuCosts = {};
         for (const entry of Object.values(allData)) {
           if (!entry.rows) continue;
+          const seenSkus = new Set();
           for (const r of entry.rows) {
             if (r.sku && r.costPerUnit) {
               if (!skuCosts[r.sku]) skuCosts[r.sku] = [];
               skuCosts[r.sku].push(r.costPerUnit);
+              seenSkus.add(r.sku);
             }
+          }
+          for (const sku of seenSkus) {
+            skuShipCount[sku] = (skuShipCount[sku] || 0) + 1;
           }
         }
         for (const [sku, costs] of Object.entries(skuCosts)) {
@@ -210,6 +216,7 @@ export async function POST(request) {
       data: result,
       yuanMap,
       skuAvgCost,
+      skuShipCount,
       recent5AvgRatio,
       parsed: {
         excel: { itemCount: excelData.items.length, totals: excelData.totals, boxCount: excelData.boxCount, boxCount2: excelData.boxCount2, shipmentCode: excelData.shipmentCode },
