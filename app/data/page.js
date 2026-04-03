@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 function formatNum(n) {
   if (n === 0 || n == null) return '0';
@@ -10,10 +10,18 @@ function formatNum(n) {
 export default function DataPage() {
   const [allData, setAllData] = useState({});
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [searched, setSearched] = useState(false);
+
+  // 디바운스: 타이핑 후 200ms 뒤에 실제 검색
+  useEffect(() => {
+    const timer = setTimeout(() => { setDebouncedSearch(search); setDisplayCount(100); }, 200);
+    return () => clearTimeout(timer);
+  }, [search]);
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState(null);
+  const [displayCount, setDisplayCount] = useState(100);
 
   useEffect(() => {
     fetch('/api/save-all').then(r => r.json()).then(d => { setAllData(d); setLoading(false); }).catch(() => setLoading(false));
@@ -22,74 +30,76 @@ export default function DataPage() {
   const costKeys = ['purchasingFee','oceanFreight','documentFee','originCertFee','customsClearanceFee','customsDuty','vat','domesticTransport'];
   const costLabels = ['수수료1%','해상운임','DOC','원산지','통관','관세','부가세','내륙운송'];
 
-  // SKU별 평균 원가 계산
-  const skuCosts = {};
-  for (const entry of Object.values(allData)) {
-    if (!entry.rows) continue;
-    for (const r of entry.rows) {
-      if (r.sku && r.costPerUnit) {
-        if (!skuCosts[r.sku]) skuCosts[r.sku] = [];
-        skuCosts[r.sku].push(r.costPerUnit);
+  // 전체 행 (useMemo로 allData 변경 시에만 재계산)
+  const allRows = useMemo(() => {
+    const skuCosts = {};
+    for (const entry of Object.values(allData)) {
+      if (!entry.rows) continue;
+      for (const r of entry.rows) {
+        if (r.sku && r.costPerUnit) {
+          if (!skuCosts[r.sku]) skuCosts[r.sku] = [];
+          skuCosts[r.sku].push(r.costPerUnit);
+        }
       }
     }
-  }
-  const skuAvg = {};
-  for (const [sku, costs] of Object.entries(skuCosts)) {
-    skuAvg[sku] = Math.round(costs.reduce((s, c) => s + c, 0) / costs.length);
-  }
-
-  // SKU별 출고 횟수 (출고코드 기준 고유 개수)
-  const skuShipCount = {};
-  for (const [shipmentKey, entry] of Object.entries(allData)) {
-    if (!entry.rows) continue;
-    for (const r of entry.rows) {
-      if (!r.sku) continue;
-      if (!skuShipCount[r.sku]) skuShipCount[r.sku] = new Set();
-      skuShipCount[r.sku].add(shipmentKey);
+    const skuAvg = {};
+    for (const [sku, costs] of Object.entries(skuCosts)) {
+      skuAvg[sku] = Math.round(costs.reduce((s, c) => s + c, 0) / costs.length);
     }
-  }
 
-  // 전체 행 펼치기
-  const allRows = [];
-  for (const [shipmentKey, entry] of Object.entries(allData)) {
-    if (!entry.rows) continue;
-    for (const r of entry.rows) {
-      const costX285 = Math.round((r.unitPriceRaw || 0) * 285);
-      allRows.push({ ...r, shipmentKey, costX285, avgCost: skuAvg[r.sku] || 0, costDiff: costX285 - (r.costPerUnit || 0), shipCount: skuShipCount[r.sku]?.size || 0 });
+    const skuShipCount = {};
+    for (const [shipmentKey, entry] of Object.entries(allData)) {
+      if (!entry.rows) continue;
+      for (const r of entry.rows) {
+        if (!r.sku) continue;
+        if (!skuShipCount[r.sku]) skuShipCount[r.sku] = new Set();
+        skuShipCount[r.sku].add(shipmentKey);
+      }
     }
-  }
 
-  // 검색
-  const getFiltered = () => {
-    const q = search.trim().toLowerCase();
-    if (!searched || !q) return allRows;
-    const kws = q.split(/\s+/);
-    return allRows.filter(r => {
-      const text = ((r.sku || '') + ' ' + (r.productName || '') + ' ' + (r.shipmentKey || '')).toLowerCase();
-      return kws.every(kw => text.includes(kw));
-    });
-  };
-
-  let filtered = getFiltered();
-
-  // 정렬
-  if (sortKey && sortDir) {
-    filtered = [...filtered].sort((a, b) => {
-      let va, vb;
-      if (sortKey.startsWith('cost_')) {
-        const ck = sortKey.replace('cost_', '');
-        va = a.costs?.[ck]?.perUnit || 0;
-        vb = b.costs?.[ck]?.perUnit || 0;
-      } else {
-        va = a[sortKey]; vb = b[sortKey];
+    const rows = [];
+    for (const [shipmentKey, entry] of Object.entries(allData)) {
+      if (!entry.rows) continue;
+      for (const r of entry.rows) {
+        const costX285 = Math.round((r.unitPriceRaw || 0) * 285);
+        rows.push({ ...r, shipmentKey, costX285, avgCost: skuAvg[r.sku] || 0, costDiff: costX285 - (r.costPerUnit || 0), shipCount: skuShipCount[r.sku]?.size || 0 });
       }
-      if (typeof va === 'string') {
-        const c = (va || '').localeCompare(vb || '', 'ko');
-        return sortDir === 'asc' ? c : -c;
-      }
+    }
+    return rows;
+  }, [allData]);
+
+  // 검색 + 정렬 (useMemo로 캐싱)
+  const filtered = useMemo(() => {
+    let result = allRows;
+    const q = debouncedSearch.trim().toLowerCase();
+    if (searched && q) {
+      const kws = q.split(/\s+/);
+      result = allRows.filter(r => {
+        const text = ((r.sku || '') + ' ' + (r.labelName || '') + ' ' + (r.productName || '') + ' ' + (r.shipmentKey || '')).toLowerCase();
+        return kws.every(kw => text.includes(kw));
+      });
+    }
+
+    if (sortKey && sortDir) {
+      result = [...result].sort((a, b) => {
+        let va, vb;
+        if (sortKey.startsWith('cost_')) {
+          const ck = sortKey.replace('cost_', '');
+          va = a.costs?.[ck]?.perUnit || 0;
+          vb = b.costs?.[ck]?.perUnit || 0;
+        } else {
+          va = a[sortKey]; vb = b[sortKey];
+        }
+        if (typeof va === 'string') {
+          const c = (va || '').localeCompare(vb || '', 'ko');
+          return sortDir === 'asc' ? c : -c;
+        }
       return sortDir === 'asc' ? (va || 0) - (vb || 0) : (vb || 0) - (va || 0);
-    });
-  }
+      });
+    }
+
+    return result;
+  }, [allRows, debouncedSearch, searched, sortKey, sortDir]);
 
   const handleSort = (key) => {
     if (sortKey === key) {
@@ -104,7 +114,7 @@ export default function DataPage() {
     { key: 'shipmentKey', label: '출고', align: 'left', bg: 'sticky left-0 bg-gray-50 z-10' },
     { key: 'sku', label: 'SKU', align: 'center' },
     { key: 'shipCount', label: '출고횟수', align: 'center' },
-    { key: 'productName', label: '품명', align: 'left' },
+    { key: 'productName', label: '라벨명', align: 'left' },
     { key: 'shippedQty', label: '수량', align: 'right' },
     { key: 'unitPriceCny', label: '단가(CNY)', align: 'right', bg: 'bg-pink-100' },
     { key: 'costPerUnit', label: '원가(개당)', align: 'right', bg: 'bg-blue-50' },
@@ -161,12 +171,12 @@ export default function DataPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row, i) => (
+                {filtered.slice(0, displayCount).map((row, i) => (
                   <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                     <td className={`px-3 py-2 font-bold text-xs whitespace-nowrap sticky left-0 z-10 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>{row.shipmentKey}</td>
                     <td className="px-3 py-2 font-mono text-xs text-center">{row.sku}</td>
                     <td className="px-3 py-2 text-center font-bold">{row.shipCount}회</td>
-                    <td className="px-3 py-2 text-xs" style={{ maxWidth: '300px', wordBreak: 'break-word' }}>{row.productName}</td>
+                    <td className="px-3 py-2 text-xs" style={{ maxWidth: '300px', wordBreak: 'break-word' }}>{row.labelName || row.productName}</td>
                     <td className="px-3 py-2 text-right">{row.shippedQty}</td>
                     <td className="px-3 py-2 text-right font-bold">{row.unitPriceCny}</td>
                     <td className="px-3 py-2 text-right font-bold text-blue-700">{formatNum(row.costPerUnit)}원</td>
@@ -179,6 +189,14 @@ export default function DataPage() {
               </tbody>
             </table>
           </div>
+          {filtered.length > displayCount && (
+            <div className="py-3 text-center border-t">
+              <button onClick={() => setDisplayCount(c => c + 100)}
+                className="px-6 py-2 bg-[#1a2332] text-white rounded-lg text-sm font-semibold hover:bg-[#2a3342]">
+                더보기 ({displayCount}/{filtered.length})
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

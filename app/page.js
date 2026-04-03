@@ -295,6 +295,10 @@ export default function Home() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
             원가 이상치
           </button>
+          <button onClick={() => window.open('/todo', '_blank')} className="w-full text-left text-gray-400 hover:text-white hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+            TO DO
+          </button>
           <button onClick={() => window.open('/logs', '_blank')} className="w-full text-left text-gray-400 hover:text-white hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
             로그
@@ -473,20 +477,20 @@ export default function Home() {
                   <table className="text-sm" style={{ tableLayout: 'fixed', minWidth: '100%' }}>
                     <thead className="bg-[#f5f6fa] border-t border-gray-200">
                       <tr>
-                        <RTh className={`${thBase} sticky left-0 bg-[#f5f6fa] z-10 cursor-pointer hover:text-blue-600`} initialWidth="120px" minWidth={40} onClick={() => handleSort('sku')}>SKU{sortIcon('sku')}</RTh>
-                        <RTh className={`${thBase}`} initialWidth="80px">출고회수</RTh>
-                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="75px" onClick={() => handleSort('cbmPerUnit')}>개당CBM{sortIcon('cbmPerUnit')}</RTh>
-                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="280px" onClick={() => handleSort('productName')}>품명{sortIcon('productName')}</RTh>
-                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="65px" onClick={() => handleSort('shippedQty')}>수량{sortIcon('shippedQty')}</RTh>
-                        <RTh className={`${thBase} bg-pink-50/70 cursor-pointer hover:text-blue-600`} initialWidth="90px" onClick={() => handleSort('unitPriceCny')}>단가(CNY){sortIcon('unitPriceCny')}</RTh>
-                        <RTh className={`${thBase} bg-pink-50/70`} initialWidth="85px">후불0.7</RTh>
-                        <RTh className={`${thBase} bg-pink-50/70 cursor-pointer hover:text-blue-600`} initialWidth="80px" onClick={() => handleSort('commission')}>수수료7%{sortIcon('commission')}</RTh>
-                        <RTh className={`${thBase} bg-amber-50/70 cursor-pointer hover:text-blue-600`} initialWidth="100px" onClick={() => handleSort('costPerUnit')}>원가(개당){sortIcon('costPerUnit')}</RTh>
-                        <RTh className={`${thBase} bg-purple-50/70 cursor-pointer hover:text-blue-600`} initialWidth="95px" onClick={() => handleSort('avgCost')}>평균원가{sortIcon('avgCost')}</RTh>
-                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="90px" onClick={() => handleSort('ratio')}>위안화비율{sortIcon('ratio')}</RTh>
-                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="95px" onClick={() => handleSort('costX285')}>원가(x285){sortIcon('costX285')}</RTh>
-                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="80px" onClick={() => handleSort('costDiff')}>차이{sortIcon('costDiff')}</RTh>
-                        {COST_COLS.map(c => <RTh key={c.key} className={`${thBase} bg-sky-50/70 cursor-pointer hover:text-blue-600`} initialWidth="120px" onClick={() => handleSort('cost_' + c.key)}>{c.label}{sortIcon('cost_' + c.key)}</RTh>)}
+                        <RTh className={`${thBase} sticky left-0 bg-[#f5f6fa] z-10 cursor-pointer hover:text-blue-600`} initialWidth="100px" minWidth={40} onClick={() => handleSort('sku')}>SKU{sortIcon('sku')}</RTh>
+                        <RTh className={`${thBase}`} initialWidth="55px">출고회수</RTh>
+                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="60px" onClick={() => handleSort('cbmPerUnit')}>CBM{sortIcon('cbmPerUnit')}</RTh>
+                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="180px" onClick={() => handleSort('productName')}>라벨명{sortIcon('productName')}</RTh>
+                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="45px" onClick={() => handleSort('shippedQty')}>수량{sortIcon('shippedQty')}</RTh>
+                        <RTh className={`${thBase} bg-pink-50/70 cursor-pointer hover:text-blue-600`} initialWidth="70px" onClick={() => handleSort('unitPriceCny')}>단가{sortIcon('unitPriceCny')}</RTh>
+                        <RTh className={`${thBase} bg-pink-50/70`} initialWidth="50px">후불</RTh>
+                        <RTh className={`${thBase} bg-pink-50/70 cursor-pointer hover:text-blue-600`} initialWidth="55px" onClick={() => handleSort('commission')}>수수료{sortIcon('commission')}</RTh>
+                        <RTh className={`${thBase} bg-amber-50/70 cursor-pointer hover:text-blue-600`} initialWidth="80px" onClick={() => handleSort('costPerUnit')}>원가(개당){sortIcon('costPerUnit')}</RTh>
+                        <RTh className={`${thBase} bg-purple-50/70 cursor-pointer hover:text-blue-600`} initialWidth="75px" onClick={() => handleSort('avgCost')}>평균원가{sortIcon('avgCost')}</RTh>
+                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="60px" onClick={() => handleSort('ratio')}>배수{sortIcon('ratio')}</RTh>
+                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="75px" onClick={() => handleSort('costX285')}>x285{sortIcon('costX285')}</RTh>
+                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="65px" onClick={() => handleSort('costDiff')}>차이{sortIcon('costDiff')}</RTh>
+                        {COST_COLS.map(c => <RTh key={c.key} className={`${thBase} bg-sky-50/70 cursor-pointer hover:text-blue-600`} initialWidth="75px" onClick={() => handleSort('cost_' + c.key)}>{c.label}{sortIcon('cost_' + c.key)}</RTh>)}
                       </tr>
                     </thead>
                     <tbody>
@@ -541,7 +545,7 @@ export default function Home() {
                             <td className={`px-3 py-2 font-mono font-semibold sticky left-0 z-10 ${bg}`} style={{ wordBreak:'break-all' }}>{r.sku}</td>
                             <td className="px-3 py-2 text-center font-semibold text-gray-700">{skuShipCount[r.sku] || 0}회</td>
                             <td className="px-3 py-2 text-right">{r.cbmPerUnit}</td>
-                            <td className="px-3 py-2" style={{ wordBreak: 'break-word' }}>{r.productName}</td>
+                            <td className="px-3 py-2" style={{ wordBreak: 'break-word' }}>{r.labelName || r.productName}</td>
                             <td className="px-3 py-2 text-right font-semibold">{r.shippedQty}</td>
                             <td className={`px-3 py-2 text-right font-semibold ${yw ? 'text-red-500 bg-red-50' : ''}`}
                               title={yv != null ? `위안화 정보: ${yv} (차이: ${(r.unitPriceCny - yv).toFixed(2)})` : ''}>
