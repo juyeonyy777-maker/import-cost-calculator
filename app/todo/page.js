@@ -32,6 +32,13 @@ export default function TodoPage() {
   const [progressData, setProgressData] = useState({});
   const [statusData, setStatusData] = useState({});
   const [filter, setFilter] = useState('all');
+  const [todoSortKey, setTodoSortKey] = useState(null);
+  const [todoSortDir, setTodoSortDir] = useState('asc');
+  const handleTodoSort = (key) => {
+    if (todoSortKey === key) { setTodoSortDir(p => p === 'asc' ? 'desc' : 'asc'); }
+    else { setTodoSortKey(key); setTodoSortDir('asc'); }
+  };
+  const todoSortIcon = (key) => todoSortKey !== key ? ' ⇅' : todoSortDir === 'asc' ? ' ▲' : ' ▼';
 
   useEffect(() => {
     try {
@@ -69,7 +76,9 @@ export default function TodoPage() {
     setCheckedItems(prev => { const next = { ...prev, [key]: !prev[key] }; localStorage.setItem('todo_checked_items', JSON.stringify(next)); return next; });
   };
   const toggleRow = (id) => {
-    setCheckedRows(prev => { const next = { ...prev, [id]: !prev[id] }; localStorage.setItem('todo_checked_rows', JSON.stringify(next)); return next; });
+    const willCheck = !checkedRows[id];
+    setCheckedRows(prev => { const next = { ...prev, [id]: willCheck }; localStorage.setItem('todo_checked_rows', JSON.stringify(next)); return next; });
+    updateStatus(id, willCheck ? 'done' : 'pending');
   };
   const updateProgress = (id, val) => {
     setProgressData(prev => { const next = { ...prev, [id]: val }; localStorage.setItem('todo_progress', JSON.stringify(next)); return next; });
@@ -102,18 +111,29 @@ export default function TodoPage() {
 
   const filtered = (() => {
     let result = rows;
-    if (filter === 'active') result = result.filter(r => !['done'].includes(getStatus(r.id)));
-    if (filter === 'done') result = result.filter(r => getStatus(r.id) === 'done');
+    if (filter === 'active') result = result.filter(r => !checkedRows[r.id]);
+    if (filter === 'done') result = result.filter(r => !!checkedRows[r.id]);
+    if (filter === 'progress') result = result.filter(r => !checkedRows[r.id] && getStatus(r.id) === 'progress');
+    if (filter === 'pending') result = result.filter(r => !checkedRows[r.id] && !['progress', 'hold'].includes(getStatus(r.id)));
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       result = result.filter(r => (r.sku + ' ' + r.labelName + ' ' + r.shipmentKey + ' ' + r.todo + ' ' + r.memo).toLowerCase().includes(q));
     }
+    if (todoSortKey) {
+      result = [...result].sort((a, b) => {
+        let cmp = 0;
+        if (todoSortKey === 'status') cmp = (getStatus(a.id)).localeCompare(getStatus(b.id));
+        else if (todoSortKey === 'shipment') cmp = (a.shipmentKey || '').localeCompare(b.shipmentKey || '');
+        else if (todoSortKey === 'name') cmp = (a.labelName || '').localeCompare(b.labelName || '');
+        return todoSortDir === 'asc' ? cmp : -cmp;
+      });
+    }
     return result;
   })();
 
-  const doneCount = rows.filter(r => getStatus(r.id) === 'done').length;
-  const progressCount = rows.filter(r => getStatus(r.id) === 'progress').length;
-  const waitingCount = rows.filter(r => getStatus(r.id) === 'waiting').length;
+  const doneCount = rows.filter(r => !!checkedRows[r.id]).length;
+  const progressCount = rows.filter(r => !checkedRows[r.id] && getStatus(r.id) === 'progress').length;
+  const waitingCount = 0;
 
   return (
     <div className="min-h-screen bg-[#f5f6fa]">
@@ -127,19 +147,19 @@ export default function TodoPage() {
       <div className="px-8 py-6">
         {/* 요약 카드 */}
         <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div onClick={() => setFilter('all')} className={`bg-white rounded-xl border border-gray-200 p-4 cursor-pointer transition-all ${filter === 'all' ? 'ring-2 ring-[#1a2332]' : 'hover:shadow-md'}`}>
             <p className="text-sm font-bold text-gray-500 mb-1">전체 할일</p>
             <p className="text-3xl font-bold text-[#1a2332]">{rows.length}</p>
           </div>
-          <div className="bg-white rounded-xl border-l-4 border-l-blue-500 border border-gray-200 p-4">
+          <div onClick={() => setFilter('progress')} className={`bg-white rounded-xl border-l-4 border-l-blue-500 border border-gray-200 p-4 cursor-pointer transition-all ${filter === 'progress' ? 'ring-2 ring-blue-500' : 'hover:shadow-md'}`}>
             <p className="text-sm font-bold text-blue-600 mb-1">진행중</p>
             <p className="text-3xl font-bold text-blue-700">{progressCount}</p>
           </div>
-          <div className="bg-white rounded-xl border-l-4 border-l-green-500 border border-gray-200 p-4">
+          <div onClick={() => setFilter('done')} className={`bg-white rounded-xl border-l-4 border-l-green-500 border border-gray-200 p-4 cursor-pointer transition-all ${filter === 'done' ? 'ring-2 ring-green-500' : 'hover:shadow-md'}`}>
             <p className="text-sm font-bold text-green-600 mb-1">완료</p>
             <p className="text-3xl font-bold text-green-700">{doneCount}</p>
           </div>
-          <div className="bg-white rounded-xl border-l-4 border-l-red-400 border border-gray-200 p-4">
+          <div onClick={() => setFilter('pending')} className={`bg-white rounded-xl border-l-4 border-l-red-400 border border-gray-200 p-4 cursor-pointer transition-all ${filter === 'pending' ? 'ring-2 ring-red-400' : 'hover:shadow-md'}`}>
             <p className="text-sm font-bold text-red-500 mb-1">미처리</p>
             <p className="text-3xl font-bold text-red-600">{rows.length - doneCount - progressCount - waitingCount}</p>
           </div>
@@ -170,11 +190,23 @@ export default function TodoPage() {
             <table className="w-full text-sm">
               <thead className="bg-[#f8f9fb] border-b border-gray-200">
                 <tr>
-                  <RTh className="px-3 py-3 text-center font-bold text-gray-600 border-r border-gray-200" initialWidth="40px" minWidth={30}></RTh>
+                  <RTh className="px-3 py-3 text-center font-bold text-gray-600 border-r border-gray-200" initialWidth="40px" minWidth={30}>
+                    <input type="checkbox"
+                      checked={filtered.length > 0 && filtered.every(r => !!checkedRows[r.id])}
+                      onChange={() => {
+                        const allChecked = filtered.every(r => !!checkedRows[r.id]);
+                        const nextChecked = { ...checkedRows };
+                        const nextStatus = { ...statusData };
+                        filtered.forEach(r => { nextChecked[r.id] = !allChecked; nextStatus[r.id] = !allChecked ? 'done' : 'pending'; });
+                        setCheckedRows(nextChecked); localStorage.setItem('todo_checked_rows', JSON.stringify(nextChecked));
+                        setStatusData(nextStatus); localStorage.setItem('todo_status', JSON.stringify(nextStatus));
+                      }}
+                      className="w-4 h-4 rounded cursor-pointer accent-green-500" />
+                  </RTh>
                   <RTh className="px-4 py-3 text-center font-bold text-gray-600 border-r border-gray-200" initialWidth="50px" minWidth={40}>#</RTh>
-                  <RTh className="px-4 py-3 text-center font-bold text-gray-600 border-r border-gray-200" initialWidth="90px" minWidth={70}>상태</RTh>
-                  <RTh className="px-4 py-3 text-center font-bold text-gray-600 border-r border-gray-200" initialWidth="160px" minWidth={100}>출고건</RTh>
-                  <RTh className="px-4 py-3 text-center font-bold text-gray-600 border-r border-gray-200" initialWidth="220px" minWidth={120}>상품명</RTh>
+                  <RTh className="px-4 py-3 text-center font-bold text-gray-600 border-r border-gray-200 cursor-pointer select-none hover:bg-gray-100" initialWidth="90px" minWidth={70} onClick={() => handleTodoSort('status')}>상태{todoSortIcon('status')}</RTh>
+                  <RTh className="px-4 py-3 text-center font-bold text-gray-600 border-r border-gray-200 cursor-pointer select-none hover:bg-gray-100" initialWidth="160px" minWidth={100} onClick={() => handleTodoSort('shipment')}>출고건{todoSortIcon('shipment')}</RTh>
+                  <RTh className="px-4 py-3 text-center font-bold text-gray-600 border-r border-gray-200 cursor-pointer select-none hover:bg-gray-100" initialWidth="220px" minWidth={120} onClick={() => handleTodoSort('name')}>상품명{todoSortIcon('name')}</RTh>
                   <RTh className="px-4 py-3 text-center font-bold text-gray-600 border-r border-gray-200" initialWidth="300px" minWidth={150}>해야할일</RTh>
                   <RTh className="px-4 py-3 text-center font-bold text-gray-600 border-r border-gray-200" initialWidth="170px" minWidth={100}>진행상황</RTh>
                   <RTh className="px-4 py-3 text-center font-bold text-gray-600" initialWidth="170px" minWidth={100}>참고</RTh>
@@ -186,32 +218,32 @@ export default function TodoPage() {
                   const todoItems = parseTodos(r.todo);
                   const rowDone = getStatus(r.id) === 'done';
                   return (
-                    <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                    <tr key={r.id} className="border-b border-gray-300 hover:bg-gray-50/50">
                       {/* 체크 */}
-                      <td className="px-3 py-3 text-center border-r border-gray-100">
+                      <td className="px-3 py-3 text-center border-r border-gray-200">
                         <input type="checkbox" checked={!!checkedRows[r.id]} onChange={() => toggleRow(r.id)}
                           className="w-4 h-4 rounded cursor-pointer accent-green-500" />
                       </td>
                       {/* # */}
-                      <td className="px-4 py-3 font-bold text-gray-400 text-center border-r border-gray-100">{i + 1}</td>
+                      <td className="px-4 py-3 font-bold text-gray-400 text-center border-r border-gray-200">{i + 1}</td>
                       {/* 상태 */}
-                      <td className="px-4 py-3 text-center border-r border-gray-100">
-                        <select value={getStatus(r.id)} onChange={(e) => updateStatus(r.id, e.target.value)}
+                      <td className="px-4 py-3 text-center border-r border-gray-200">
+                        <select value={getStatus(r.id)} onChange={(e) => { if (e.target.value !== 'done') updateStatus(r.id, e.target.value); }}
                           className={`px-2.5 py-1.5 rounded-full text-xs font-bold border-0 cursor-pointer ${st.bg} ${st.text}`}>
-                          {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          {statusOptions.filter(o => o.value !== 'done' || getStatus(r.id) === 'done').map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
                       </td>
                       {/* 출고건 */}
-                      <td className="px-4 py-3 border-r border-gray-100">
+                      <td className="px-4 py-3 border-r border-gray-200">
                         <p className="font-bold text-[#1a2332]">{r.shipmentKey}</p>
                         <p className="text-xs text-gray-500 font-mono mt-0.5">{r.sku}</p>
                       </td>
                       {/* 상품명 */}
-                      <td className="px-4 py-3 border-r border-gray-100">
+                      <td className="px-4 py-3 border-r border-gray-200">
                         <p className="text-[#1a2332] font-semibold leading-snug" style={{wordBreak:'break-word'}}>{r.labelName}</p>
                       </td>
                       {/* 해야할일 */}
-                      <td className="px-4 py-3 border-r border-gray-100">
+                      <td className="px-4 py-3 border-r border-gray-200">
                         <div className="space-y-2">
                           {todoItems.map((item, idx) => {
                             const key = `${r.id}_${idx}`;
@@ -234,7 +266,7 @@ export default function TodoPage() {
                         </div>
                       </td>
                       {/* 진행상황 */}
-                      <td className="px-4 py-3 border-r border-gray-100">
+                      <td className="px-4 py-3 border-r border-gray-200">
                         <textarea rows={2} spellCheck={false}
                           value={progressData[r.id] || ''}
                           onChange={(e) => updateProgress(r.id, e.target.value)}

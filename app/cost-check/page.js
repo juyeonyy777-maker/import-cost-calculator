@@ -11,16 +11,19 @@ export default function CostCheckPage() {
   const [allData, setAllData] = useState({});
   const [loading, setLoading] = useState(true);
   const [threshold, setThreshold] = useState(15);
-  const [sortKey, setSortKey] = useState('devPct');
-  const [sortDir, setSortDir] = useState('desc');
-  const [filterMode, setFilterMode] = useState('all'); // all, flagged
+  const [sortKey, setSortKey] = useState(() => { try { return localStorage.getItem('costcheck_sortKey') || 'devPct'; } catch { return 'devPct'; } });
+  const [sortDir, setSortDir] = useState(() => { try { return localStorage.getItem('costcheck_sortDir') || 'desc'; } catch { return 'desc'; } });
+  const [filterMode, setFilterMode] = useState('unchecked');
   const [search, setSearch] = useState('');
   const [expandedSku, setExpandedSku] = useState(null);
   const [compareSort, setCompareSort] = useState(null);
+  const [shipDateSort, setShipDateSort] = useState(null);
+  const [shipCostSort, setShipCostSort] = useState(null);
   const [displayCount, setDisplayCount] = useState(100);
   const [costInputSku, setCostInputSku] = useState(null);
   const [costInputVal, setCostInputVal] = useState('');
   const [selectedShipments, setSelectedShipments] = useState({});
+  const [shipFilter, setShipFilter] = useState('');
   const [confirmed, setConfirmed] = useState({});
   const [memos, setMemos] = useState({});
   const [reasons, setReasons] = useState({});
@@ -113,15 +116,21 @@ export default function CostCheckPage() {
     const q = search.trim().toLowerCase();
     filtered = filtered.filter(s => (s.sku + ' ' + (s.labelName || '') + ' ' + s.productName).toLowerCase().includes(q));
   }
-  if (filterMode === 'flagged') {
-    filtered = filtered.filter(s => s.flagged);
+  if (filterMode === 'unchecked') {
+    filtered = filtered.filter(s => !confirmed[s.sku]);
+  } else if (filterMode === 'progress') {
+    filtered = filtered.filter(s => confirmed[s.sku] === 'progress');
+  } else if (filterMode === 'checked') {
+    filtered = filtered.filter(s => confirmed[s.sku] === 'done');
+  } else if (filterMode === 'hold') {
+    filtered = filtered.filter(s => confirmed[s.sku] === 'hold');
   }
 
   // 정렬
   const handleSort = (key) => {
     if (sortKey === key) {
-      setSortDir(p => p === 'asc' ? 'desc' : 'asc');
-    } else { setSortKey(key); setSortDir('desc'); }
+      setSortDir(p => { const next = p === 'asc' ? 'desc' : 'asc'; localStorage.setItem('costcheck_sortDir', next); return next; });
+    } else { setSortKey(key); setSortDir('desc'); localStorage.setItem('costcheck_sortKey', key); localStorage.setItem('costcheck_sortDir', 'desc'); }
   };
   const sortIcon = (key) => sortKey !== key ? ' ⇅' : sortDir === 'asc' ? ' ▲' : ' ▼';
 
@@ -148,6 +157,52 @@ export default function CostCheckPage() {
       </header>
 
       <div className="px-8 py-6">
+        {/* CBM 입력필요 */}
+        {(() => {
+          const zeroCbmItems = [];
+          for (const [shipmentKey, entry] of Object.entries(allData)) {
+            if (!entry.rows) continue;
+            for (const r of entry.rows) {
+              if (r.sku && r.cbmPerUnit === 0) {
+                const exists = zeroCbmItems.find(x => x.sku === r.sku);
+                if (!exists) zeroCbmItems.push({ sku: r.sku, name: r.labelName || r.productName || '', shipmentKey });
+                else if (!exists.shipmentKey.includes(shipmentKey)) exists.shipmentKey += ', ' + shipmentKey;
+              }
+            }
+          }
+          if (zeroCbmItems.length === 0) return null;
+          return (
+            <div className="bg-amber-50 border border-amber-300 rounded-xl p-5 mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-amber-600 font-bold text-sm">⚠ CBM 입력필요</span>
+                <span className="text-xs text-amber-500">CBM이 0으로 잡혀 해상운임 배분이 부정확한 상품 ({zeroCbmItems.length}건)</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-amber-100/50">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-semibold text-amber-700 w-12">#</th>
+                      <th className="px-3 py-2 text-left font-semibold text-amber-700">SKU</th>
+                      <th className="px-3 py-2 text-left font-semibold text-amber-700">상품명</th>
+                      <th className="px-3 py-2 text-left font-semibold text-amber-700">출고건</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {zeroCbmItems.map((item, i) => (
+                      <tr key={item.sku} className="border-t border-amber-200">
+                        <td className="px-3 py-2 text-amber-600 font-bold">{i + 1}</td>
+                        <td className="px-3 py-2 font-mono text-xs">{item.sku}</td>
+                        <td className="px-3 py-2" style={{wordBreak:'break-word'}}>{item.name}</td>
+                        <td className="px-3 py-2 text-xs text-gray-500">{item.shipmentKey}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* 요약 카드 */}
         <div className="grid grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -178,13 +233,25 @@ export default function CostCheckPage() {
         {/* 필터 & 검색 */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 flex items-center gap-4">
           <div className="flex gap-1">
+            <button onClick={() => setFilterMode('unchecked')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${filterMode === 'unchecked' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+              미확인 ({skuStats.filter(s => !confirmed[s.sku]).length})
+            </button>
+            <button onClick={() => setFilterMode('progress')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${filterMode === 'progress' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}>
+              진행중 ({skuStats.filter(s => confirmed[s.sku] === 'progress').length})
+            </button>
+            <button onClick={() => setFilterMode('checked')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${filterMode === 'checked' ? 'bg-green-600 text-white' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>
+              확인완료 ({skuStats.filter(s => confirmed[s.sku] === 'done').length})
+            </button>
+            <button onClick={() => setFilterMode('hold')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${filterMode === 'hold' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}>
+              보류 ({skuStats.filter(s => confirmed[s.sku] === 'hold').length})
+            </button>
             <button onClick={() => setFilterMode('all')}
               className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${filterMode === 'all' ? 'bg-[#1a2332] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
               전체 ({skuStats.length})
-            </button>
-            <button onClick={() => setFilterMode('flagged')}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${filterMode === 'flagged' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}>
-              이상치만 ({flaggedCount})
             </button>
           </div>
           <input type="text" placeholder="SKU 또는 상품명 검색..." value={search}
@@ -211,6 +278,7 @@ export default function CostCheckPage() {
               <table className="text-sm w-full">
                 <thead className="bg-[#f5f6fa] border-b border-gray-200">
                   <tr>
+                    <th className={`${thCls} text-center w-20`}>상태</th>
                     <th className={`${thCls} text-center w-10`}></th>
                     <th className={`${thCls} text-left`} onClick={() => handleSort('sku')}>SKU{sortIcon('sku')}</th>
                     <th className={`${thCls} text-left`} onClick={() => handleSort('productName')}>라벨명{sortIcon('productName')}</th>
@@ -230,6 +298,24 @@ export default function CostCheckPage() {
                     return (
                       <Fragment key={s.sku}>
                         <tr className={`${bg} hover:bg-blue-50/30 cursor-pointer transition-colors`} onClick={() => setExpandedSku(isExpanded ? null : s.sku)}>
+                          <td className="px-3 py-2.5 text-center" onClick={e => e.stopPropagation()}>
+                            <select value={confirmed[s.sku] || ''} onChange={e => {
+                              const next = { ...confirmed, [s.sku]: e.target.value || undefined };
+                              if (!e.target.value) delete next[s.sku];
+                              setConfirmed(next);
+                              localStorage.setItem('costcheck_confirmed', JSON.stringify(next));
+                            }} className={`px-2 py-1 rounded-full text-xs font-bold border-0 cursor-pointer ${
+                              confirmed[s.sku] === 'progress' ? 'bg-blue-100 text-blue-700' :
+                              confirmed[s.sku] === 'done' ? 'bg-green-100 text-green-700' :
+                              confirmed[s.sku] === 'hold' ? 'bg-red-100 text-red-600' :
+                              'bg-gray-100 text-gray-500'
+                            }`}>
+                              <option value="">미확인</option>
+                              <option value="progress">진행중</option>
+                              <option value="done">확인완료</option>
+                              <option value="hold">보류</option>
+                            </select>
+                          </td>
                           <td className="px-3 py-2.5 text-center text-gray-400">{isExpanded ? '▼' : '▶'}</td>
                           <td className="px-3 py-2.5 font-mono font-semibold">{s.sku}</td>
                           <td className="px-3 py-2.5" style={{ maxWidth: '300px', wordBreak: 'break-word' }}>{s.labelName || s.productName}</td>
@@ -245,7 +331,7 @@ export default function CostCheckPage() {
                         </tr>
                         {isExpanded && (
                           <tr>
-                            <td colSpan={10} className="px-0 py-0">
+                            <td colSpan={11} className="px-0 py-0">
                               <div className="bg-gray-50 border-y border-gray-200 py-5 flex justify-center">
                               <div className="w-full max-w-[1400px]">
 
@@ -278,19 +364,42 @@ export default function CostCheckPage() {
                                     });
                                   };
                                   const sortedShipments = [...relatedShipments].sort((a, b) => {
+                                    if (shipCostSort) {
+                                      const cmp = (a.costPerUnit || 0) - (b.costPerUnit || 0);
+                                      return shipCostSort === 'asc' ? cmp : -cmp;
+                                    }
+                                    if (shipDateSort) {
+                                      const cmp = (a.shipmentKey || '').localeCompare(b.shipmentKey || '');
+                                      return shipDateSort === 'asc' ? cmp : -cmp;
+                                    }
                                     if (a.isSelf !== b.isSelf) return a.isSelf ? -1 : 1;
                                     return (a.shipmentKey || '').localeCompare(b.shipmentKey || '');
                                   });
                                   const hasRelated = relatedShipments.some(r => !r.isSelf);
                                   return (
                                     <div className="mb-5">
-                                      <p className="text-xs font-semibold text-gray-500 mb-2">
-                                        출고건별 원가 확정 — {relatedShipments.length}건
-                                        {hasRelated && <span className="text-blue-500 ml-1">(같은 상품 다른 옵션 포함)</span>}
-                                        <span className="ml-2">(비교: 최대 5개 선택)</span>
+                                      <p className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-2 flex-wrap">
+                                        <span>출고건별 원가 확정 — {relatedShipments.length}건</span>
+                                        {hasRelated && <span className="text-blue-500">(같은 상품 다른 옵션 포함)</span>}
+                                        <span>(비교: 최대 5개 선택)</span>
+                                        <button onClick={() => { setShipDateSort(prev => prev === 'asc' ? 'desc' : prev === 'desc' ? null : 'asc'); setShipCostSort(null); }}
+                                          className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${shipDateSort ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}>
+                                          날짜 정렬 {shipDateSort === 'asc' ? '▲' : shipDateSort === 'desc' ? '▼' : '⇅'}
+                                        </button>
+                                        <button onClick={() => { setShipCostSort(prev => prev === 'asc' ? 'desc' : prev === 'desc' ? null : 'asc'); setShipDateSort(null); }}
+                                          className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${shipCostSort ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}>
+                                          단가 정렬 {shipCostSort === 'asc' ? '▲' : shipCostSort === 'desc' ? '▼' : '⇅'}
+                                        </button>
+                                        <input type="text" placeholder="옵션 필터 (예: 10개)" value={shipFilter}
+                                          onChange={e => setShipFilter(e.target.value)}
+                                          className="px-3 py-1 border border-gray-300 rounded-full text-xs focus:outline-none focus:border-blue-400 w-40" />
                                       </p>
                                       <div className="space-y-2">
-                                        {sortedShipments.map((sh, j) => {
+                                        {sortedShipments.filter(sh => {
+                                          if (!shipFilter.trim()) return true;
+                                          const q = shipFilter.trim().toLowerCase();
+                                          return (sh.option || '').toLowerCase().includes(q) || (sh.shipmentKey || '').toLowerCase().includes(q) || (sh.sku || '').toLowerCase().includes(q);
+                                        }).map((sh, j) => {
                                           const origIdx = relatedShipments.indexOf(sh);
                                           const isSelected = sel.includes(origIdx);
                                           const diff = sh.costPerUnit - s.avg;

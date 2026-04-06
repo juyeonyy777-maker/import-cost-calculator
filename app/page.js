@@ -291,6 +291,10 @@ export default function Home() {
               </button>
             </>
           )}
+          <button onClick={() => window.open('/cbm-needed', '_blank')} className="w-full text-left text-amber-400 hover:text-amber-300 hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+            CBM 입력필요
+          </button>
           <button onClick={() => window.open('/cost-check', '_blank')} className="w-full text-left text-gray-400 hover:text-white hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
             원가 이상치
@@ -382,6 +386,13 @@ export default function Home() {
           {/* ═══ 결과 화면 ═══ */}
           {result && (
             <>
+              {/* 뒤로가기 버튼 */}
+              <div className="mb-4">
+                <button onClick={handleReset} className="px-4 py-2 bg-white text-gray-600 border border-gray-300 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors flex items-center gap-2">
+                  <span>←</span> 새 파일 계산
+                </button>
+              </div>
+
               {/* 비용 요약 */}
               <div className="bg-white rounded-xl border border-gray-200 p-6 mb-5">
                 <div className="flex items-center justify-between mb-5">
