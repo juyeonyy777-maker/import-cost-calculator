@@ -11,7 +11,6 @@ export async function POST(request) {
     const formData = await request.formData();
     const excelFile = formData.get('excel');
     const excelFile2 = formData.get('excel2');
-    const invoiceFile = formData.get('invoice');
     const declarationFile = formData.get('declaration');
     const exchangeRateInput = formData.get('exchangeRate');
 
@@ -51,18 +50,20 @@ export async function POST(request) {
       }
     }
 
-    // 청구서 PDF 검증
-    if (invoiceFile && invoiceFile.size > 0) {
+    // 청구서 PDF 검증 (다중 파일 지원)
+    const invoiceFiles = formData.getAll('invoice');
+    for (const invoiceFile of invoiceFiles) {
+      if (!invoiceFile || invoiceFile.size === 0) continue;
       const invBuf = Buffer.from(await invoiceFile.arrayBuffer());
       try {
         const pdfParse = (await import('pdf-parse')).default;
         const pdf = await pdfParse(invBuf);
         const missing3 = ['KRW', 'TOTAL'].filter(k => !pdf.text.toUpperCase().includes(k));
         if (missing3.length > 0) {
-          return NextResponse.json({ error: `청구서 PDF 형식 오류\n필수 항목 누락: ${missing3.join(', ')}` }, { status: 400 });
+          return NextResponse.json({ error: `청구서 PDF 형식 오류 (${invoiceFile.name})\n필수 항목 누락: ${missing3.join(', ')}` }, { status: 400 });
         }
       } catch (e) {
-        return NextResponse.json({ error: `청구서 읽기 실패: ${e.message}` }, { status: 400 });
+        return NextResponse.json({ error: `청구서 읽기 실패 (${invoiceFile.name}): ${e.message}` }, { status: 400 });
       }
     }
 
@@ -112,13 +113,36 @@ export async function POST(request) {
       excelData.boxCount2 = excel2Data.boxCount;
     }
 
-    // 청구서 PDF 파싱
+    // 청구서 PDF 파싱 (다중 파일 합산)
     let invoiceData = null;
-    if (invoiceFile && invoiceFile.size > 0) {
+    console.log('[청구서] 파일 수:', invoiceFiles.length, invoiceFiles.map(f => f?.name));
+    for (const invFile of invoiceFiles) {
+      if (!invFile || invFile.size === 0) continue;
       const pdfParse = (await import('pdf-parse')).default;
-      const buf = Buffer.from(await invoiceFile.arrayBuffer());
+      const buf = Buffer.from(await invFile.arrayBuffer());
       const pdf = await pdfParse(buf);
-      invoiceData = parseInvoicePdf(pdf.text);
+      const parsed = parseInvoicePdf(pdf.text);
+
+      console.log('[청구서] 파싱 결과:', invFile.name, 'costs:', Object.keys(parsed.costs), 'total:', parsed.totalAmount);
+      if (!invoiceData) {
+        invoiceData = parsed;
+      } else {
+        // 비용 항목 합산
+        for (const [key, val] of Object.entries(parsed.costs)) {
+          if (invoiceData.costs[key]) {
+            invoiceData.costs[key].amount = (invoiceData.costs[key].amount || 0) + (val.amount || 0);
+            invoiceData.costs[key].vatAmount = (invoiceData.costs[key].vatAmount || 0) + (val.vatAmount || 0);
+          } else {
+            invoiceData.costs[key] = { ...val };
+          }
+        }
+        invoiceData.totalAmount += parsed.totalAmount || 0;
+        invoiceData.totalVat += parsed.totalVat || 0;
+        if (parsed.cbm > 0) invoiceData.cbm += parsed.cbm;
+        if (parsed.weight > 0) invoiceData.weight += parsed.weight;
+        if (parsed.packages > 0) invoiceData.packages = Math.max(invoiceData.packages, parsed.packages);
+        if (!invoiceData.exchangeRateCNY && parsed.exchangeRateCNY) invoiceData.exchangeRateCNY = parsed.exchangeRateCNY;
+      }
     }
 
     // 정산서 PDF 파싱

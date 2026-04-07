@@ -41,7 +41,8 @@ export default function Home() {
   const [nameOk, setNameOk] = useState(false);
   const [excelFile, setExcelFile] = useState(null);
   const [excelFile2, setExcelFile2] = useState(null);
-  const [invoiceFile, setInvoiceFile] = useState(null);
+  const [invoiceFiles, setInvoiceFiles] = useState([]);
+  const invoiceFilesRef = useRef([]);
   const [declarationFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -59,7 +60,8 @@ export default function Home() {
   useEffect(() => { const p = e => e.preventDefault(); window.addEventListener('dragover', p); window.addEventListener('drop', p); return () => { window.removeEventListener('dragover', p); window.removeEventListener('drop', p); }; }, []);
 
   /* ── 파일 자동 분류 (ZIP 해제 포함) ── */
-  const classifyAndSet = async (files) => {
+  const classifyAndSet = async (files, isTop = true) => {
+    const pdfFiles = [];
     for (const f of files) {
       const name = f.name.toLowerCase();
       if (name.endsWith('.zip')) {
@@ -72,7 +74,8 @@ export default function Home() {
             const blob = await entry.async('blob');
             extracted.push(new File([blob], fn, { type: blob.type }));
           }
-          await classifyAndSet(extracted);
+          const zipPdfs = await classifyAndSet(extracted, false);
+          pdfFiles.push(...zipPdfs);
         } catch (e) { console.error('ZIP 해제 실패:', e); }
         continue;
       }
@@ -80,19 +83,29 @@ export default function Home() {
       const isPdf = name.endsWith('.pdf');
       if (isExcel && name.includes('출고내역')) { setExcelFile2(f); sendLog(userName, '파일업로드', '출고내역: ' + f.name); }
       else if (isExcel) { setExcelFile(f); sendLog(userName, '파일업로드', '결제명세서: ' + f.name); }
-      else if (isPdf) { setInvoiceFile(f); sendLog(userName, '파일업로드', '청구서: ' + f.name); }
+      else if (isPdf) { pdfFiles.push(f); sendLog(userName, '파일업로드', '청구서: ' + f.name); }
     }
+    if (isTop && pdfFiles.length > 0) {
+      const existingNames = new Set(invoiceFilesRef.current.map(f => f.name));
+      const newFiles = pdfFiles.filter(f => !existingNames.has(f.name));
+      const merged = [...invoiceFilesRef.current, ...newFiles];
+      invoiceFilesRef.current = merged;
+      setInvoiceFiles(merged);
+    }
+    return pdfFiles;
   };
 
   /* ── 원가 계산 ── */
   const handleCalc = async () => {
     if (!excelFile) { setError('결제명세서를 업로드해주세요.'); return; }
     if (!excelFile2) { setError('출고내역을 업로드해주세요.'); return; }
-    if (!invoiceFile) { setError('청구서 PDF를 업로드해주세요.'); return; }
+    const currentInvoices = invoiceFilesRef.current;
+    if (currentInvoices.length === 0) { setError('청구서 PDF를 업로드해주세요.'); return; }
     sendLog(userName, '원가계산', ''); setLoading(true); setError(''); setResult(null);
 
     const fd = new FormData();
-    fd.append('excel', excelFile); fd.append('excel2', excelFile2); fd.append('invoice', invoiceFile);
+    fd.append('excel', excelFile); fd.append('excel2', excelFile2);
+    for (const f of currentInvoices) fd.append('invoice', f);
     if (declarationFile) fd.append('declaration', declarationFile);
 
     try {
@@ -105,7 +118,11 @@ export default function Home() {
 
       const bE = data.parsed?.excel?.boxCount || data.parsed?.excel?.boxCount2 || 0;
       const bI = data.parsed?.invoice?.packages || 0;
-      if (bI > 0 && bE > 0 && bI !== bE) { alert(`박스수량 불일치!\n청구서: ${bI}CTN / 출고내역: ${bE}상자`); setResult(null); setParsedInfo(null); return; }
+      console.log('[박스체크] 청구서:', bI, '출고내역:', bE, '차이:', Math.abs(bI - bE));
+      if (bI > 0 && bE > 0 && Math.abs(bI - bE) >= 2) {
+        alert(`박스수량 불일치!\n청구서: ${bI}CTN / 출고내역: ${bE}상자`);
+        setResult(null); setParsedInfo(null); return;
+      }
 
       const invBl = data.parsed?.invoice?.blNo || '';
       const declBl = data.parsed?.declaration?.blNo || '';
@@ -180,7 +197,7 @@ export default function Home() {
   /* ── 초기화 ── */
   const handleReset = () => {
     sendLog(userName, '초기화', '');
-    setExcelFile(null); setExcelFile2(null); setInvoiceFile(null);
+    setExcelFile(null); setExcelFile2(null); setInvoiceFiles([]); invoiceFilesRef.current = [];
     setResult(null); setError(''); setParsedInfo(null); setYuanMap({}); setSkuAvgCost({}); setSkuShipCount({}); setRecent5(null);
     document.querySelectorAll('input[type="file"]').forEach(i => { i.value = ''; });
   };
@@ -257,7 +274,7 @@ export default function Home() {
   }
 
   const costSums = {};
-  for (const col of COST_COLS) costSums[col.key] = rows.reduce((s, r) => s + ((r.costs?.[col.key]?.perUnit || 0) * r.shippedQty), 0);
+  for (const col of COST_COLS) costSums[col.key] = rows.reduce((s, r) => s + (r.costs?.[col.key]?.total || 0), 0);
   const allocTotal = COST_COLS.reduce((s, col) => s + costSums[col.key], 0);
   const invoiceTotal = parsedInfo?.invoice?.totalAmount || 0;
   const allocDiff = allocTotal - invoiceTotal;
@@ -283,15 +300,15 @@ export default function Home() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
             원가 계산기
           </div>
-          {!result && (
-            <>
-              <button onClick={() => window.open('/data', '_blank')} className="w-full text-left text-gray-400 hover:text-white hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" /></svg>
-                전체 데이터 조회
-              </button>
-            </>
-          )}
-          <button onClick={() => window.open('/cbm-needed', '_blank')} className="w-full text-left text-amber-400 hover:text-amber-300 hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
+          <button onClick={() => window.open('/confirmed', '_blank')} className="w-full text-left text-gray-400 hover:text-white hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            확정 원가
+          </button>
+          <button onClick={() => window.open('/data', '_blank')} className="w-full text-left text-gray-400 hover:text-white hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" /></svg>
+            전체 데이터 조회
+          </button>
+          <button onClick={() => window.open('/cbm-needed', '_blank')} className="w-full text-left text-gray-400 hover:text-white hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
             CBM 입력필요
           </button>
@@ -342,7 +359,7 @@ export default function Home() {
               {/* 통합 드래그앤드롭 */}
               <div
                 className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-all mb-6 ${
-                  (excelFile && excelFile2 && invoiceFile) ? 'border-green-300 bg-green-50/30' : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/20'
+                  (excelFile && excelFile2 && invoiceFiles.length > 0) ? 'border-green-300 bg-green-50/30' : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/20'
                 }`}
                 onClick={() => dropRef.current?.click()}
                 onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
@@ -361,13 +378,19 @@ export default function Home() {
                   {[
                     { label: '결제명세서', file: excelFile, req: true },
                     { label: '출고내역', file: excelFile2, req: true },
-                    { label: '청구서', file: invoiceFile, req: true },
                   ].map(({ label, file, req }) => (
                     <div key={label} className={`rounded-lg p-3 transition-all ${file ? 'bg-green-50 border border-green-300' : 'bg-gray-50 border border-gray-200'}`}>
                       <p className={`font-semibold text-sm ${file ? 'text-green-700' : 'text-gray-600'}`}>{label}</p>
                       <p className={`text-xs mt-1 truncate ${file ? 'text-green-500' : req ? 'text-red-400 font-semibold' : 'text-gray-400'}`}>{file ? file.name : '필수'}</p>
                     </div>
                   ))}
+                  <div className={`rounded-lg p-3 transition-all cursor-pointer ${invoiceFiles.length > 0 ? 'bg-green-50 border border-green-300' : 'bg-gray-50 border border-gray-200'}`}
+                    onClick={(e) => { e.stopPropagation(); document.getElementById('pdf-input').click(); }}>
+                    <input id="pdf-input" type="file" accept=".pdf" multiple className="hidden"
+                      onChange={e => { const pdfs = Array.from(e.target.files || []); if (pdfs.length > 0) { invoiceFilesRef.current = pdfs; setInvoiceFiles(pdfs); } e.target.value = ''; }} />
+                    <p className={`font-semibold text-sm ${invoiceFiles.length > 0 ? 'text-green-700' : 'text-gray-600'}`}>청구서 ({invoiceFiles.length}장)</p>
+                    <p className={`text-xs mt-1 truncate ${invoiceFiles.length > 0 ? 'text-green-500' : 'text-red-400 font-semibold'}`}>{invoiceFiles.length > 0 ? invoiceFiles.map(f => f.name).join(', ') : 'PDF 선택'}</p>
+                  </div>
                 </div>
               </div>
 
@@ -491,7 +514,7 @@ export default function Home() {
                         <RTh className={`${thBase} sticky left-0 bg-[#f5f6fa] z-10 cursor-pointer hover:text-blue-600`} initialWidth="100px" minWidth={40} onClick={() => handleSort('sku')}>SKU{sortIcon('sku')}</RTh>
                         <RTh className={`${thBase}`} initialWidth="55px">출고회수</RTh>
                         <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="60px" onClick={() => handleSort('cbmPerUnit')}>CBM{sortIcon('cbmPerUnit')}</RTh>
-                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="180px" onClick={() => handleSort('productName')}>라벨명{sortIcon('productName')}</RTh>
+                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="180px" onClick={() => handleSort('productName')}>상품명{sortIcon('productName')}</RTh>
                         <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="45px" onClick={() => handleSort('shippedQty')}>수량{sortIcon('shippedQty')}</RTh>
                         <RTh className={`${thBase} bg-pink-50/70 cursor-pointer hover:text-blue-600`} initialWidth="70px" onClick={() => handleSort('unitPriceCny')}>단가{sortIcon('unitPriceCny')}</RTh>
                         <RTh className={`${thBase} bg-pink-50/70`} initialWidth="50px">후불</RTh>

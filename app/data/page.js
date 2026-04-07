@@ -1,10 +1,31 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 function formatNum(n) {
   if (n === 0 || n == null) return '0';
   return Math.round(n).toLocaleString('ko-KR');
+}
+
+function RTh({ children, className = '', style = {}, minWidth = 50, initialWidth, ...props }) {
+  const ref = useRef(null);
+  const sx = useRef(0), sw = useRef(0);
+  const onDown = useCallback(e => {
+    e.preventDefault(); e.stopPropagation();
+    sx.current = e.clientX; sw.current = ref.current.offsetWidth;
+    const move = e2 => { ref.current.style.width = Math.max(minWidth, sw.current + e2.clientX - sx.current) + 'px'; };
+    const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+  }, [minWidth]);
+  const s = { ...style, position: 'relative' };
+  if (initialWidth) { s.width = initialWidth; }
+  return (
+    <th ref={ref} className={className} style={s} {...props}>
+      {children}
+      <div onMouseDown={onDown} style={{ position:'absolute', right:0, top:0, bottom:0, width:'6px', cursor:'col-resize', userSelect:'none', background:'#cbd5e1', borderRadius:'2px' }}
+        onMouseOver={e => { e.currentTarget.style.background = '#94a3b8'; }} onMouseOut={e => { e.currentTarget.style.background = '#cbd5e1'; }} />
+    </th>
+  );
 }
 
 export default function DataPage() {
@@ -22,6 +43,11 @@ export default function DataPage() {
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState(null);
   const [displayCount, setDisplayCount] = useState(100);
+  const [expandedSku, setExpandedSku] = useState(null);
+
+  const toggleExpand = useCallback((sku) => {
+    setExpandedSku(prev => prev === sku ? null : sku);
+  }, []);
 
   useEffect(() => {
     fetch('/api/save-all').then(r => r.json()).then(d => { setAllData(d); setLoading(false); }).catch(() => setLoading(false));
@@ -68,6 +94,16 @@ export default function DataPage() {
     return rows;
   }, [allData]);
 
+  // SKU별 그룹핑
+  const skuGroups = useMemo(() => {
+    const groups = {};
+    for (const row of allRows) {
+      if (!groups[row.sku]) groups[row.sku] = { sku: row.sku, labelName: row.labelName || row.productName, rows: [], shipCount: row.shipCount, avgCost: row.avgCost };
+      groups[row.sku].rows.push(row);
+    }
+    return groups;
+  }, [allRows]);
+
   // 검색 + 정렬 (useMemo로 캐싱)
   const filtered = useMemo(() => {
     let result = allRows;
@@ -108,19 +144,20 @@ export default function DataPage() {
     } else { setSortKey(key); setSortDir('asc'); }
   };
   const sortIcon = (key) => sortKey !== key ? ' ⇅' : sortDir === 'asc' ? ' ▲' : sortDir === 'desc' ? ' ▼' : ' ⇅';
-  const th = (bg) => `px-3 py-2 font-bold text-gray-800 whitespace-nowrap cursor-pointer select-none hover:text-blue-600 ${bg}`;
+  const th = (bg) => `px-3 py-2 font-bold text-gray-800 whitespace-nowrap cursor-pointer select-none hover:text-blue-600 text-center ${bg}`;
 
   const columns = [
-    { key: 'shipmentKey', label: '출고', align: 'left', bg: 'sticky left-0 bg-gray-50 z-10' },
-    { key: 'sku', label: 'SKU', align: 'center' },
-    { key: 'shipCount', label: '출고횟수', align: 'center' },
-    { key: 'productName', label: '라벨명', align: 'left' },
-    { key: 'shippedQty', label: '수량', align: 'right' },
-    { key: 'unitPriceCny', label: '단가(CNY)', align: 'right', bg: 'bg-pink-100' },
-    { key: 'costPerUnit', label: '원가(개당)', align: 'right', bg: 'bg-blue-50' },
-    { key: 'avgCost', label: '평균원가', align: 'right', bg: 'bg-purple-50' },
-    { key: 'costX285', label: '원가(x285)', align: 'right', bg: 'bg-amber-100' },
-    { key: 'costDiff', label: '차이', align: 'right' },
+    { key: 'shipmentKey', label: '출고', bg: 'sticky left-0 bg-gray-50 z-10', width: '150px' },
+    { key: 'sku', label: 'SKU', width: '120px' },
+    { key: 'cbmPerUnit', label: '개별CBM', width: '80px' },
+    { key: 'shipCount', label: '출고횟수', width: '70px' },
+    { key: 'productName', label: '상품명', width: '200px' },
+    { key: 'shippedQty', label: '수량', width: '60px' },
+    { key: 'unitPriceCny', label: '단가(CNY)', bg: 'bg-pink-100', width: '80px' },
+    { key: 'costPerUnit', label: '원가(개당)', bg: 'bg-blue-50', width: '90px' },
+    { key: 'avgCost', label: '평균원가', bg: 'bg-purple-50', width: '90px' },
+    { key: 'costX285', label: '원가(x285)', bg: 'bg-amber-100', width: '90px' },
+    { key: 'costDiff', label: '차이', width: '80px' },
   ];
 
   return (
@@ -140,9 +177,9 @@ export default function DataPage() {
           <button onClick={async () => {
             const XLSX = await import('xlsx');
             const wb = XLSX.utils.book_new();
-            const headers = ['출고','SKU','출고횟수','품명','수량','단가(CNY)','원가(개당)','평균원가','원가(x285)','차이',...costLabels];
+            const headers = ['출고','SKU','개별CBM','출고횟수','품명','수량','단가(CNY)','원가(개당)','평균원가','원가(x285)','차이',...costLabels];
             const wsData = [headers, ...filtered.map(r => [
-              r.shipmentKey, r.sku, r.shipCount, r.productName, r.shippedQty, r.unitPriceCny,
+              r.shipmentKey, r.sku, r.cbmPerUnit || 0, r.shipCount, r.productName, r.shippedQty, r.unitPriceCny,
               r.costPerUnit, r.avgCost, r.costX285, r.costDiff,
               ...costKeys.map(k => r.costs?.[k]?.perUnit || 0),
             ])];
@@ -162,30 +199,66 @@ export default function DataPage() {
             <table className="text-sm w-full">
               <thead className="bg-gray-50">
                 <tr>
+                  <th className={th('') + ' w-10'}></th>
                   {columns.map(c => (
-                    <th key={c.key} className={th(`text-${c.align} ${c.bg || ''}`)} onClick={() => handleSort(c.key)}>{c.label}{sortIcon(c.key)}</th>
+                    <RTh key={c.key} className={th(c.bg || '')} initialWidth={c.width} onClick={() => handleSort(c.key)}>{c.label}{sortIcon(c.key)}</RTh>
                   ))}
                   {costKeys.map((k, i) => (
-                    <th key={k} className={th('text-right bg-sky-50')} onClick={() => handleSort('cost_' + k)}>{costLabels[i]}{sortIcon('cost_' + k)}</th>
+                    <RTh key={k} className={th('bg-sky-50')} initialWidth="80px" onClick={() => handleSort('cost_' + k)}>{costLabels[i]}{sortIcon('cost_' + k)}</RTh>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {filtered.slice(0, displayCount).map((row, i) => (
-                  <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className={`px-3 py-2 font-bold text-xs whitespace-nowrap sticky left-0 z-10 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>{row.shipmentKey}</td>
-                    <td className="px-3 py-2 font-mono text-xs text-center">{row.sku}</td>
-                    <td className="px-3 py-2 text-center font-bold">{row.shipCount}회</td>
-                    <td className="px-3 py-2 text-xs" style={{ maxWidth: '300px', wordBreak: 'break-word' }}>{row.labelName || row.productName}</td>
-                    <td className="px-3 py-2 text-right">{row.shippedQty}</td>
-                    <td className="px-3 py-2 text-right font-bold">{row.unitPriceCny}</td>
-                    <td className="px-3 py-2 text-right font-bold text-blue-700">{formatNum(row.costPerUnit)}원</td>
-                    <td className="px-3 py-2 text-right font-bold text-purple-700">{row.avgCost ? formatNum(row.avgCost) + '원' : '-'}</td>
-                    <td className="px-3 py-2 text-right font-bold">{formatNum(row.costX285)}원</td>
-                    <td className={`px-3 py-2 text-right font-bold ${row.costDiff >= 0 ? 'text-red-600' : 'text-blue-600'}`}>{row.costDiff >= 0 ? '+' : ''}{formatNum(row.costDiff)}원</td>
-                    {costKeys.map(k => <td key={k} className="px-3 py-2 text-right">{formatNum(row.costs?.[k]?.perUnit)}원</td>)}
-                  </tr>
-                ))}
+                {expandedSku ? (
+                  <>
+                    <tr className="bg-gray-100 cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => toggleExpand(expandedSku)}>
+                      <td className="px-3 py-2.5 text-center text-gray-400">▲</td>
+                      <td colSpan={999} className="px-3 py-2.5 font-bold text-sm">
+                        {expandedSku} — {skuGroups[expandedSku]?.labelName} ({skuGroups[expandedSku]?.rows.length}건)
+                      </td>
+                    </tr>
+                    <tr className="h-0"><td colSpan={999} className="p-0 border-t-2 border-blue-300"></td></tr>
+                    {skuGroups[expandedSku]?.rows.map((sub, j) => (
+                      <tr key={j} className={j % 2 === 0 ? 'bg-white' : 'bg-blue-50/30'}>
+                        <td className="px-3 py-2"></td>
+                        <td className={`px-3 py-2 font-bold text-xs whitespace-nowrap sticky left-0 z-10 ${j % 2 === 0 ? 'bg-white' : 'bg-blue-50/30'}`}>{sub.shipmentKey}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-center">{sub.sku}</td>
+                        <td className="px-3 py-2 text-right text-xs">{sub.cbmPerUnit ? sub.cbmPerUnit.toFixed(4) : '-'}</td>
+                        <td className="px-3 py-2 text-center font-bold">{sub.shipCount}회</td>
+                        <td className="px-3 py-2 text-xs" style={{ maxWidth: '300px', wordBreak: 'break-word' }}>{sub.labelName || sub.productName}</td>
+                        <td className="px-3 py-2 text-right">{sub.shippedQty}</td>
+                        <td className="px-3 py-2 text-right font-bold">{sub.unitPriceCny}</td>
+                        <td className="px-3 py-2 text-right font-bold text-blue-700">{formatNum(sub.costPerUnit)}원</td>
+                        <td className="px-3 py-2 text-right font-bold text-purple-700">{sub.avgCost ? formatNum(sub.avgCost) + '원' : '-'}</td>
+                        <td className="px-3 py-2 text-right font-bold">{formatNum(sub.costX285)}원</td>
+                        <td className={`px-3 py-2 text-right font-bold ${sub.costDiff >= 0 ? 'text-red-600' : 'text-blue-600'}`}>{sub.costDiff >= 0 ? '+' : ''}{formatNum(sub.costDiff)}원</td>
+                        {costKeys.map(k => <td key={k} className="px-3 py-2 text-right">{formatNum(sub.costs?.[k]?.perUnit)}원</td>)}
+                      </tr>
+                    ))}
+                  </>
+                ) : (
+                  filtered.slice(0, displayCount).map((row, i) => {
+                    const group = skuGroups[row.sku];
+                    const hasMultiple = group && group.rows.length > 1;
+                    return (
+                      <tr key={i} className={`${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${hasMultiple ? 'cursor-pointer hover:bg-blue-50/30 transition-colors' : ''}`} onClick={() => hasMultiple && toggleExpand(row.sku)}>
+                        <td className="px-3 py-2.5 text-center text-gray-400">{hasMultiple ? '▼' : ''}</td>
+                        <td className={`px-3 py-2 font-bold text-xs whitespace-nowrap sticky left-0 z-10 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>{row.shipmentKey}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-center">{row.sku}</td>
+                        <td className="px-3 py-2 text-right text-xs">{row.cbmPerUnit ? row.cbmPerUnit.toFixed(4) : '-'}</td>
+                        <td className="px-3 py-2 text-center font-bold">{row.shipCount}회</td>
+                        <td className="px-3 py-2 text-xs" style={{ maxWidth: '300px', wordBreak: 'break-word' }}>{row.labelName || row.productName}</td>
+                        <td className="px-3 py-2 text-right">{row.shippedQty}</td>
+                        <td className="px-3 py-2 text-right font-bold">{row.unitPriceCny}</td>
+                        <td className="px-3 py-2 text-right font-bold text-blue-700">{formatNum(row.costPerUnit)}원</td>
+                        <td className="px-3 py-2 text-right font-bold text-purple-700">{row.avgCost ? formatNum(row.avgCost) + '원' : '-'}</td>
+                        <td className="px-3 py-2 text-right font-bold">{formatNum(row.costX285)}원</td>
+                        <td className={`px-3 py-2 text-right font-bold ${row.costDiff >= 0 ? 'text-red-600' : 'text-blue-600'}`}>{row.costDiff >= 0 ? '+' : ''}{formatNum(row.costDiff)}원</td>
+                        {costKeys.map(k => <td key={k} className="px-3 py-2 text-right">{formatNum(row.costs?.[k]?.perUnit)}원</td>)}
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>

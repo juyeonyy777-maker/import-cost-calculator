@@ -281,7 +281,7 @@ export default function CostCheckPage() {
                     <th className={`${thCls} text-center w-20`}>상태</th>
                     <th className={`${thCls} text-center w-10`}></th>
                     <th className={`${thCls} text-left`} onClick={() => handleSort('sku')}>SKU{sortIcon('sku')}</th>
-                    <th className={`${thCls} text-left`} onClick={() => handleSort('productName')}>라벨명{sortIcon('productName')}</th>
+                    <th className={`${thCls} text-left`} onClick={() => handleSort('productName')}>상품명{sortIcon('productName')}</th>
                     <th className={`${thCls} text-center`} onClick={() => handleSort('shipCount')}>출고횟수{sortIcon('shipCount')}</th>
                     <th className={`${thCls} text-right`} onClick={() => handleSort('min')}>최소원가{sortIcon('min')}</th>
                     <th className={`${thCls} text-right`} onClick={() => handleSort('max')}>최대원가{sortIcon('max')}</th>
