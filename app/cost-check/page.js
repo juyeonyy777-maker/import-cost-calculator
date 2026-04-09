@@ -607,6 +607,7 @@ export default function CostCheckPage() {
                                                   ['운임단가', `${sh.chinaShippingPerUnit || (sh.unitPriceCny && sh.unitPriceRaw ? Math.round((sh.unitPriceCny - sh.unitPriceRaw) * 100) / 100 : 0)}`],
                                                   ['출고수량', `${sh.shippedQty}개`],
                                                   ['CBM/개', sh.cbmPerUnit != null ? `${sh.cbmPerUnit}` : '—'],
+                                                  ['해상운임', sh.costs?.oceanFreight?.perUnit ? `${fmt(sh.costs.oceanFreight.perUnit)}` : '—'],
                                                   ['환율', sh.exchangeRate ? `${sh.exchangeRate}` : '—'],
                                                 ].map(([label, val], idx) => {
                                                   // 최고원가 카드에서 최저보다 높은 값은 빨간색
@@ -617,6 +618,7 @@ export default function CostCheckPage() {
                                                     [getShipping(sh), getShipping(loSh)],
                                                     [sh.shippedQty, loSh.shippedQty],
                                                     [sh.cbmPerUnit, loSh.cbmPerUnit],
+                                                    [sh.costs?.oceanFreight?.perUnit || 0, loSh.costs?.oceanFreight?.perUnit || 0],
                                                     [sh.exchangeRate, loSh.exchangeRate],
                                                   ];
                                                   const isHigher = isHi && vals[idx] && Number(vals[idx][0]) > Number(vals[idx][1]);

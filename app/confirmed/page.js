@@ -44,6 +44,18 @@ export default function ConfirmedCostPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  const [confirmedSet, setConfirmedSet] = useState({});
+  const [costMemos, setCostMemos] = useState({});
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('costcheck_confirmed');
+      if (saved) setConfirmedSet(JSON.parse(saved));
+      const savedMemos = localStorage.getItem('costcheck_memos');
+      if (savedMemos) setCostMemos(JSON.parse(savedMemos));
+    } catch {}
+  }, []);
+
   useEffect(() => {
     fetch('/api/save-all').then(r => r.json()).then(d => { setAllData(d); setLoading(false); }).catch(() => setLoading(false));
   }, []);
@@ -64,7 +76,10 @@ export default function ConfirmedCostPage() {
         if (!skuMap[r.sku]) {
           skuMap[r.sku] = { costs: [], qtys: [], rows: [] };
         }
-        skuMap[r.sku].rows.push({ ...r, shipmentKey: shipKey });
+        const cKey = `${r.sku}_${shipKey}`;
+        const isConfirmed = confirmedSet[cKey];
+        const confirmedCost = isConfirmed && costMemos[cKey] ? Number(costMemos[cKey]) : null;
+        skuMap[r.sku].rows.push({ ...r, shipmentKey: shipKey, confirmedCost });
         if (r.costPerUnit) {
           skuMap[r.sku].costs.push(r.costPerUnit);
           skuMap[r.sku].qtys.push(r.shippedQty || 0);
@@ -80,6 +95,18 @@ export default function ConfirmedCostPage() {
       const weightedAvg = totalQty > 0 ? Math.round(data.costs.reduce((s, c, i) => s + c * data.qtys[i], 0) / totalQty) : 0;
       const costX285 = Math.round((latest.unitPriceRaw || 0) * 285);
 
+      const confirmedRows = data.rows.filter(r => r.confirmedCost !== null);
+      const hasConfirmed = confirmedRows.length > 0;
+      let confirmedWeightedAvg;
+      if (hasConfirmed) {
+        const cTotalQty = confirmedRows.reduce((s, r) => s + (r.shippedQty || 0), 0);
+        confirmedWeightedAvg = cTotalQty > 0
+          ? Math.round(confirmedRows.reduce((s, r) => s + r.confirmedCost * (r.shippedQty || 0), 0) / cTotalQty)
+          : weightedAvg;
+      } else {
+        confirmedWeightedAvg = weightedAvg;
+      }
+
       result.push({
         sku,
         labelName: latest.labelName || latest.productName,
@@ -91,6 +118,9 @@ export default function ConfirmedCostPage() {
         costPerUnit: latest.costPerUnit || 0,
         avgCost: avg,
         weightedAvg,
+        confirmedWeightedAvg,
+        hasConfirmed,
+        confirmedCount: confirmedRows.length,
         costX285,
         costDiff: costX285 - (latest.costPerUnit || 0),
         costs: latest.costs,
@@ -98,7 +128,7 @@ export default function ConfirmedCostPage() {
       });
     }
     return result;
-  }, [allData]);
+  }, [allData, confirmedSet, costMemos]);
 
   // 검색 + 정렬
   const filtered = useMemo(() => {
@@ -143,8 +173,8 @@ export default function ConfirmedCostPage() {
   const columns = [
     { key: 'sku', label: 'SKU', width: '130px' },
     { key: 'labelName', label: '상품명', width: '220px' },
+    { key: 'confirmedWeightedAvg', label: <span className="inline-block text-center">확정원가<br/>(가중평균)</span>, width: '100px', bg: 'bg-green-50' },
     { key: 'costPerUnit', label: '최신원가', width: '90px', bg: 'bg-blue-50' },
-    { key: 'weightedAvg', label: '가중평균원가', width: '90px', bg: 'bg-green-50' },
     { key: 'costX285', label: '원가(x285)', width: '90px', bg: 'bg-amber-100' },
     { key: 'costDiff', label: '차이', width: '80px' },
     { key: 'shipCount', label: '출고횟수', width: '70px' },
@@ -169,10 +199,10 @@ export default function ConfirmedCostPage() {
           <button onClick={async () => {
             const XLSX = await import('xlsx');
             const wb = XLSX.utils.book_new();
-            const headers = ['SKU','상품명','최신원가','가중평균원가','원가(x285)','차이','출고횟수','최신출고','개별CBM'];
+            const headers = ['SKU','상품명','확정원가','최신원가','원가(x285)','차이','출고횟수','최신출고','개별CBM'];
             const wsData = [headers, ...filtered.map(r => [
               r.sku, r.labelName,
-              r.costPerUnit, r.weightedAvg, r.costX285, r.costDiff,
+              r.confirmedWeightedAvg ?? '', r.costPerUnit, r.costX285, r.costDiff,
               r.shipCount, r.latestShip, r.cbmPerUnit || 0,
             ])];
             const ws = XLSX.utils.aoa_to_sheet(wsData);
@@ -192,7 +222,7 @@ export default function ConfirmedCostPage() {
                 <tr>
                   <th className={th('') + ' w-10'}></th>
                   {columns.map(c => (
-                    <RTh key={c.key} className={th(c.bg || '')} initialWidth={c.width} onClick={() => handleSort(c.key)}>{c.label}{sortIcon(c.key)}</RTh>
+                    <RTh key={c.key} className={th(c.bg || '') + (c.key === 'confirmedWeightedAvg' ? ' !whitespace-normal' : '')} initialWidth={c.width} onClick={() => handleSort(c.key)}>{c.label}{sortIcon(c.key)}</RTh>
                   ))}
                 </tr>
               </thead>
@@ -214,8 +244,9 @@ export default function ConfirmedCostPage() {
                           <td className="px-3 py-2.5"></td>
                           <td className="px-3 py-2.5 font-mono text-sm font-semibold text-center">{sub.sku}</td>
                           <td className="px-3 py-2.5 text-sm text-center" style={{ maxWidth: '300px', wordBreak: 'break-word' }}>{sub.labelName || sub.productName}</td>
-                          <td className="px-3 py-2.5 text-center text-sm font-semibold text-blue-700">{fmt(sub.costPerUnit)}원</td>
-                          <td className="px-3 py-2.5 text-center text-sm font-semibold text-green-700">-</td>
+                          <td className={`px-3 py-2.5 text-center text-sm font-semibold ${sub.confirmedCost !== null ? 'text-green-600' : 'text-gray-900'}`}>{sub.confirmedCost !== null ? fmt(sub.confirmedCost) + '원' : fmt(sub.costPerUnit) + '원'}</td>
+                          <td className="px-3 py-2.5 text-center text-sm font-semibold text-blue-700">-</td>
+
                           <td className="px-3 py-2.5 text-center text-sm font-semibold">{fmt(Math.round((sub.unitPriceRaw || 0) * 285))}원</td>
                           <td className={`px-3 py-2.5 text-center text-sm font-semibold ${(Math.round((sub.unitPriceRaw || 0) * 285) - (sub.costPerUnit || 0)) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{(Math.round((sub.unitPriceRaw || 0) * 285) - (sub.costPerUnit || 0)) >= 0 ? '+' : ''}{fmt(Math.round((sub.unitPriceRaw || 0) * 285) - (sub.costPerUnit || 0))}원</td>
                           <td className="px-3 py-2.5 text-center text-sm font-semibold">-</td>
@@ -233,8 +264,9 @@ export default function ConfirmedCostPage() {
                         <td className="px-3 py-2.5 text-center text-gray-400">▼</td>
                         <td className="px-3 py-2.5 font-mono text-sm font-semibold text-center">{row.sku}</td>
                         <td className="px-3 py-2.5 text-sm text-center" style={{ maxWidth: '300px', wordBreak: 'break-word' }}>{row.labelName}</td>
+                        <td className={`px-3 py-2.5 text-center text-sm font-semibold ${row.hasConfirmed ? 'text-green-600' : 'text-gray-900'}`}>{fmt(row.confirmedWeightedAvg)}원</td>
                         <td className="px-3 py-2.5 text-center text-sm font-semibold text-blue-700">{fmt(row.costPerUnit)}원</td>
-                        <td className="px-3 py-2.5 text-center text-sm font-semibold text-green-700">{row.weightedAvg ? fmt(row.weightedAvg) + '원' : '-'}</td>
+
                         <td className="px-3 py-2.5 text-center text-sm font-semibold">{fmt(row.costX285)}원</td>
                         <td className={`px-3 py-2.5 text-center text-sm font-semibold ${row.costDiff >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{row.costDiff >= 0 ? '+' : ''}{fmt(row.costDiff)}원</td>
                         <td className="px-3 py-2.5 text-center text-sm font-semibold">{row.shipCount}회</td>

@@ -223,7 +223,7 @@ export default function DataPage() {
                         <td className="px-3 py-2"></td>
                         <td className={`px-3 py-2 font-bold text-xs whitespace-nowrap sticky left-0 z-10 ${j % 2 === 0 ? 'bg-white' : 'bg-blue-50/30'}`}>{sub.shipmentKey}</td>
                         <td className="px-3 py-2 font-mono text-xs text-center">{sub.sku}</td>
-                        <td className="px-3 py-2 text-right text-xs">{sub.cbmPerUnit ? sub.cbmPerUnit.toFixed(4) : '-'}</td>
+                        <td className={`px-3 py-2 text-right text-xs font-semibold ${sub.cbmConfirmed === false ? 'text-red-500' : ''}`}>{sub.cbmPerUnit ? sub.cbmPerUnit.toFixed(4) : '-'}</td>
                         <td className="px-3 py-2 text-center font-bold">{sub.shipCount}회</td>
                         <td className="px-3 py-2 text-xs" style={{ maxWidth: '300px', wordBreak: 'break-word' }}>{sub.labelName || sub.productName}</td>
                         <td className="px-3 py-2 text-right">{sub.shippedQty}</td>
@@ -245,7 +245,7 @@ export default function DataPage() {
                         <td className="px-3 py-2.5 text-center text-gray-400">{hasMultiple ? '▼' : ''}</td>
                         <td className={`px-3 py-2 font-bold text-xs whitespace-nowrap sticky left-0 z-10 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>{row.shipmentKey}</td>
                         <td className="px-3 py-2 font-mono text-xs text-center">{row.sku}</td>
-                        <td className="px-3 py-2 text-right text-xs">{row.cbmPerUnit ? row.cbmPerUnit.toFixed(4) : '-'}</td>
+                        <td className={`px-3 py-2 text-right text-xs font-semibold ${group && group.rows.some(r => r.cbmConfirmed === false) ? 'text-red-500' : ''}`}>{row.cbmPerUnit ? row.cbmPerUnit.toFixed(4) : '-'}</td>
                         <td className="px-3 py-2 text-center font-bold">{row.shipCount}회</td>
                         <td className="px-3 py-2 text-xs" style={{ maxWidth: '300px', wordBreak: 'break-word' }}>{row.labelName || row.productName}</td>
                         <td className="px-3 py-2 text-right">{row.shippedQty}</td>
