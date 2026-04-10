@@ -300,6 +300,10 @@ export default function Home() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
             원가 계산기
           </div>
+          <button onClick={() => window.open('/confirmed-cbm', '_blank')} className="w-full text-left text-gray-400 hover:text-white hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            확정CBM 원가
+          </button>
           <button onClick={() => window.open('/confirmed', '_blank')} className="w-full text-left text-gray-400 hover:text-white hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             확정 원가

@@ -91,7 +91,7 @@ export async function POST(request) {
         if ((item.boxCbm || item.cbm || 0) > boxMap[box].cbm) boxMap[box].cbm = item.boxCbm || item.cbm || 0;
       }
 
-      const skuCbmTotal = {}, skuQtyTotal = {};
+      const skuCbmTotal = {}, skuQtyTotal = {}, skuCbmConfirmed = {};
       for (const item of excel2Data.rawItems) {
         const box = item.boxNo;
         const qty = item.setQty > 0 ? item.setQty : item.shippedQty;
@@ -99,12 +99,16 @@ export async function POST(request) {
         const cbmPerUnit = boxMap[box].cbm / boxMap[box].totalQty;
         skuCbmTotal[item.sku] = (skuCbmTotal[item.sku] || 0) + cbmPerUnit * qty;
         skuQtyTotal[item.sku] = (skuQtyTotal[item.sku] || 0) + qty;
+        // 출고내역 기준 cbmConfirmed: 개별 cbm이 0이면 추정
+        if (item.cbmConfirmed === false) skuCbmConfirmed[item.sku] = false;
+        if (skuCbmConfirmed[item.sku] === undefined) skuCbmConfirmed[item.sku] = item.cbmConfirmed !== false;
       }
 
       let newTotalQty = 0, newTotalCbm = 0;
       for (const item of excelData.items) {
         if (qtyMap[item.sku] !== undefined) item.shippedQty = qtyMap[item.sku];
         if (skuCbmTotal[item.sku] !== undefined) item.totalCbm = skuCbmTotal[item.sku];
+        if (skuCbmConfirmed[item.sku] !== undefined) item.cbmConfirmed = skuCbmConfirmed[item.sku];
         newTotalQty += item.shippedQty;
         newTotalCbm += item.totalCbm || 0;
       }

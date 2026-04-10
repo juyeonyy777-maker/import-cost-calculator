@@ -44,6 +44,7 @@ export default function DataPage() {
   const [sortDir, setSortDir] = useState(null);
   const [displayCount, setDisplayCount] = useState(100);
   const [expandedSku, setExpandedSku] = useState(null);
+  const [cbmFilter, setCbmFilter] = useState('all'); // 'all' | 'confirmed' | 'estimated'
 
   const toggleExpand = useCallback((sku) => {
     setExpandedSku(prev => prev === sku ? null : sku);
@@ -64,13 +65,15 @@ export default function DataPage() {
       for (const r of entry.rows) {
         if (r.sku && r.costPerUnit) {
           if (!skuCosts[r.sku]) skuCosts[r.sku] = [];
-          skuCosts[r.sku].push(r.costPerUnit);
+          skuCosts[r.sku].push({ cost: r.costPerUnit, qty: r.shippedQty });
         }
       }
     }
     const skuAvg = {};
     for (const [sku, costs] of Object.entries(skuCosts)) {
-      skuAvg[sku] = Math.round(costs.reduce((s, c) => s + c, 0) / costs.length);
+      const totalCost = costs.reduce((s, c) => s + c.cost * c.qty, 0);
+      const totalQty = costs.reduce((s, c) => s + c.qty, 0);
+      skuAvg[sku] = totalQty > 0 ? Math.round(totalCost / totalQty) : 0;
     }
 
     const skuShipCount = {};
@@ -116,6 +119,27 @@ export default function DataPage() {
       });
     }
 
+    // CBM 필터 적용
+    if (cbmFilter === 'confirmed') {
+      // 검은색만: 해당 SKU 그룹 전체가 확정인 행만
+      result = result.filter(r => {
+        const group = skuGroups[r.sku];
+        return r.cbmConfirmed !== false && (!group || group.rows.every(row => row.cbmConfirmed !== false));
+      });
+    } else if (cbmFilter === 'semi') {
+      // 준확정: SKU 그룹 내 빨간색이 있지만 검은색이 절반 이상
+      result = result.filter(r => {
+        const group = skuGroups[r.sku];
+        if (!group) return false;
+        const confirmedCount = group.rows.filter(row => row.cbmConfirmed !== false).length;
+        const hasEstimated = group.rows.some(row => row.cbmConfirmed === false);
+        return hasEstimated && confirmedCount >= group.rows.length / 2;
+      });
+    } else if (cbmFilter === 'estimated') {
+      // 빨간색만: cbmConfirmed === false인 행만
+      result = result.filter(r => r.cbmConfirmed === false);
+    }
+
     if (sortKey && sortDir) {
       result = [...result].sort((a, b) => {
         let va, vb;
@@ -135,7 +159,7 @@ export default function DataPage() {
     }
 
     return result;
-  }, [allRows, debouncedSearch, searched, sortKey, sortDir]);
+  }, [allRows, debouncedSearch, searched, sortKey, sortDir, cbmFilter]);
 
   const handleSort = (key) => {
     if (sortKey === key) {
@@ -155,7 +179,7 @@ export default function DataPage() {
     { key: 'shippedQty', label: '수량', width: '60px' },
     { key: 'unitPriceCny', label: '단가(CNY)', bg: 'bg-pink-100', width: '80px' },
     { key: 'costPerUnit', label: '원가(개당)', bg: 'bg-blue-50', width: '90px' },
-    { key: 'avgCost', label: '평균원가', bg: 'bg-purple-50', width: '90px' },
+    { key: 'avgCost', label: '가중평균원가', bg: 'bg-purple-50', width: '90px' },
     { key: 'costX285', label: '원가(x285)', bg: 'bg-amber-100', width: '90px' },
     { key: 'costDiff', label: '차이', width: '80px' },
   ];
@@ -188,6 +212,26 @@ export default function DataPage() {
             XLSX.utils.book_append_sheet(wb, ws, '데이터');
             XLSX.writeFile(wb, `전체데이터_${new Date().toISOString().slice(0,10)}.xlsx`);
           }} className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium text-sm hover:bg-green-700 whitespace-nowrap">EXCEL 다운</button>
+        </div>
+        <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t border-gray-200">
+          <span className="text-sm font-bold text-gray-700">개별CBM 필터:</span>
+          {[
+            { key: 'all', label: '전체', color: '', activeBg: 'bg-blue-600 border-blue-600' },
+            { key: 'confirmed', label: 'CBM 확정', color: 'text-gray-900', activeBg: 'bg-gray-800 border-gray-800' },
+            { key: 'semi', label: 'CBM 준확정', color: 'text-amber-500', activeBg: 'bg-amber-500 border-amber-500' },
+            { key: 'estimated', label: 'CBM 추정', color: 'text-red-500', activeBg: 'bg-red-500 border-red-500' },
+          ].map(opt => (
+            <button key={opt.key} onClick={() => { setCbmFilter(opt.key); setDisplayCount(100); }}
+              className={`px-4 py-2 rounded-lg text-sm font-bold border-2 transition-colors ${
+                cbmFilter === opt.key
+                  ? opt.activeBg + ' text-white'
+                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+              }`}>
+              {opt.color && <span className={`${cbmFilter === opt.key ? 'text-white' : opt.color} mr-1`}>●</span>}
+              {opt.label}
+            </button>
+          ))}
+          {cbmFilter !== 'all' && <span className="text-sm font-bold text-blue-600 ml-2">{filtered.length}건</span>}
         </div>
       </div>
 
