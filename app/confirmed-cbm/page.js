@@ -45,6 +45,16 @@ export default function ConfirmedCbmPage() {
   const [expandedSku, setExpandedSku] = useState(null);
   const [cbmFilter, setCbmFilter] = useState('all');
   const [confirmedSkus, setConfirmedSkus] = useState(new Set());
+  const [compareSort, setCompareSort] = useState(null);
+  const [shipDateSort, setShipDateSort] = useState(null);
+  const [shipCostSort, setShipCostSort] = useState(null);
+  const [costInputSku, setCostInputSku] = useState(null);
+  const [costInputVal, setCostInputVal] = useState('');
+  const [selectedShipments, setSelectedShipments] = useState({});
+  const [shipFilter, setShipFilter] = useState('');
+  const [ccConfirmed, setCcConfirmed] = useState({});
+  const [ccMemos, setCcMemos] = useState({});
+  const [ccReasons, setCcReasons] = useState({});
 
   const toggleConfirmSku = useCallback(async (sku) => {
     if (confirmedSkus.has(sku)) return; // 한번 확인완료하면 해제 안 됨
@@ -61,6 +71,25 @@ export default function ConfirmedCbmPage() {
 
   const [excludedData, setExcludedData] = useState({});
   const excludedKeys = useMemo(() => new Set(Object.entries(excludedData).filter(([, v]) => v.excluded !== false).map(([k]) => k)), [excludedData]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('costcheck_confirmed');
+      if (saved) setCcConfirmed(JSON.parse(saved));
+      const savedMemos = localStorage.getItem('costcheck_memos');
+      if (savedMemos) setCcMemos(JSON.parse(savedMemos));
+      const savedReasons = localStorage.getItem('costcheck_reasons');
+      if (savedReasons) setCcReasons(JSON.parse(savedReasons));
+    } catch {}
+  }, []);
+
+  const updateCcMemo = useCallback((key, text) => {
+    setCcMemos(prev => {
+      const next = { ...prev, [key]: text };
+      localStorage.setItem('costcheck_memos', JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -213,10 +242,13 @@ export default function ConfirmedCbmPage() {
       }
       const minCost = Math.min(...agg.subRows.map(r => r.costPerUnit || Infinity));
       const avgVsMin = minCost > 0 && minCost < Infinity ? Math.round((agg.avgCost - minCost) / minCost * 1000) / 10 : 0;
+      const activeSubs = agg.subRows.filter(r => !r._excluded);
+      const maxCost = activeSubs.length > 0 ? Math.max(...activeSubs.map(r => r.costPerUnit || 0)) : 0;
+      const costRange = (maxCost && minCost < Infinity) ? maxCost - minCost : 0;
       return {
         sku: agg.sku, productName: agg.productName, labelName: agg.labelName,
         shippedQty: agg.shippedQty, shipCount: agg.shipCount, avgCost: agg.avgCost,
-        minCost, avgVsMin,
+        minCost, avgVsMin, costRange,
         cbmPerUnit: Math.round(cbmPerUnit * 10000) / 10000,
         cbmConfirmed: agg.cbmConfirmed,
         costPerUnit, unitPriceCny, costX285,
@@ -308,6 +340,7 @@ export default function ConfirmedCbmPage() {
     { key: 'costPerUnit', label: '원가(개당)', bg: 'bg-blue-50', width: '90px' },
     { key: 'avgCost', label: '가중평균원가', bg: 'bg-purple-50', width: '100px' },
     { key: 'avgVsMin', label: '최소대비', bg: 'bg-purple-50', width: '80px' },
+    { key: 'costRange', label: '원가편차', bg: 'bg-purple-50', width: '90px' },
     { key: 'costX285', label: '원가(x285)', bg: 'bg-amber-100', width: '90px' },
     { key: 'costDiff', label: '차이', width: '80px' },
   ];
@@ -355,10 +388,10 @@ export default function ConfirmedCbmPage() {
             const XLSX = await import('xlsx');
             const wb = XLSX.utils.book_new();
             const filterName = { all: '전체', confirmed: 'CBM확정', semi: 'CBM준확정', estimated: 'CBM추정' }[cbmFilter] || '전체';
-            const headers = ['SKU','상품명','개별CBM','출고횟수','총수량','단가(CNY)','원가(개당)','가중평균원가','원가(x285)','차이',...costLabels];
+            const headers = ['SKU','상품명','개별CBM','출고횟수','총수량','단가(CNY)','원가(개당)','가중평균원가','최소대비(%)','원가편차','원가(x285)','차이',...costLabels];
             const wsData = [headers, ...filtered.map(r => [
               r.sku, r.labelName || r.productName, r.cbmPerUnit || 0, r.shipCount, r.shippedQty, r.unitPriceCny,
-              r.costPerUnit, r.avgCost, r.costX285, r.costDiff,
+              r.costPerUnit, r.avgCost, r.avgVsMin, r.costRange, r.costX285, r.costDiff,
               ...costKeys.map(k => r.costs?.[k]?.perUnit || 0),
             ])];
             const ws = XLSX.utils.aoa_to_sheet(wsData);
@@ -440,6 +473,7 @@ export default function ConfirmedCbmPage() {
                         <td className="px-3 py-2 text-center font-bold text-blue-700">{formatNum(sub.costPerUnit)}원</td>
                         <td className="px-3 py-2 text-center font-bold text-purple-700">{sub.avgCost ? formatNum(sub.avgCost) + '원' : '-'}</td>
                         <td className="px-3 py-2 text-center text-gray-400">-</td>
+                        <td className="px-3 py-2 text-center text-gray-400">-</td>
                         <td className="px-3 py-2 text-center font-bold">{formatNum(sub.costX285)}원</td>
                         <td className={`px-3 py-2 text-center font-bold ${sub.costDiff >= 0 ? 'text-red-600' : 'text-blue-600'}`}>{sub.costDiff >= 0 ? '+' : ''}{formatNum(sub.costDiff)}원</td>
                         {costKeys.map(k => <td key={k} className="px-3 py-2 text-center">{formatNum(sub.costs?.[k]?.perUnit)}원</td>)}
@@ -464,6 +498,351 @@ export default function ConfirmedCbmPage() {
                       )}
                     </React.Fragment>
                     ))}
+                    {/* 비교 분석 섹션 */}
+                    {(() => {
+                      const sku = expandedSku;
+                      const currentRow = allRows.find(r => r.sku === sku);
+                      if (!currentRow || currentRow.subRows.length < 2) return null;
+                      const baseName = (currentRow.labelName || currentRow.productName || '').split(',')[0].trim();
+                      const relatedShipments = [];
+                      for (const sh of currentRow.subRows) {
+                        relatedShipments.push({ ...sh, option: (currentRow.labelName || '').split(',').slice(1).join(',').trim() || sku, isSelf: true });
+                      }
+                      for (const other of allRows) {
+                        if (other.sku === sku) continue;
+                        const otherBase = (other.labelName || other.productName || '').split(',')[0].trim();
+                        if (otherBase === baseName && baseName.length > 3) {
+                          for (const sh of other.subRows) {
+                            relatedShipments.push({ ...sh, sku: other.sku, option: (other.labelName || '').split(',').slice(1).join(',').trim() || other.sku, isSelf: false });
+                          }
+                        }
+                      }
+                      const sel = selectedShipments[sku] || (currentRow.subRows.length === 2 ? [0, 1] : []);
+                      const toggleSel = (idx) => {
+                        setSelectedShipments(prev => {
+                          const cur = prev[sku] || (currentRow.subRows.length === 2 ? [0, 1] : []);
+                          const next = cur.includes(idx) ? cur.filter(i => i !== idx) : [...cur, idx].slice(-5);
+                          return { ...prev, [sku]: next };
+                        });
+                      };
+                      const sortedShipments = [...relatedShipments].sort((a, b) => {
+                        if (shipCostSort) return shipCostSort === 'asc' ? (a.costPerUnit||0)-(b.costPerUnit||0) : (b.costPerUnit||0)-(a.costPerUnit||0);
+                        if (shipDateSort) return shipDateSort === 'asc' ? (a.shipmentKey||'').localeCompare(b.shipmentKey||'') : (b.shipmentKey||'').localeCompare(a.shipmentKey||'');
+                        if (a.isSelf !== b.isSelf) return a.isSelf ? -1 : 1;
+                        return (a.shipmentKey||'').localeCompare(b.shipmentKey||'');
+                      });
+                      const hasRelated = relatedShipments.some(r => !r.isSelf);
+                      const avg = currentRow.avgCost;
+                      return (
+                        <tr><td colSpan={999} className="p-0">
+                          <div className="bg-gray-50 border-t-2 border-blue-200 py-5 flex justify-center">
+                          <div className="w-full max-w-[1400px] px-4">
+                            {/* 출고건 선택 */}
+                            <div className="mb-5">
+                              <p className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-2 flex-wrap">
+                                <span>출고건별 원가 확정 — {relatedShipments.length}건</span>
+                                {hasRelated && <span className="text-blue-500">(같은 상품 다른 옵션 포함)</span>}
+                                <span>(비교: 최대 5개 선택)</span>
+                                <button onClick={() => { setShipDateSort(prev => prev === 'asc' ? 'desc' : prev === 'desc' ? null : 'asc'); setShipCostSort(null); }}
+                                  className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${shipDateSort ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}>
+                                  날짜 정렬 {shipDateSort === 'asc' ? '▲' : shipDateSort === 'desc' ? '▼' : '⇅'}
+                                </button>
+                                <button onClick={() => { setShipCostSort(prev => prev === 'asc' ? 'desc' : prev === 'desc' ? null : 'asc'); setShipDateSort(null); }}
+                                  className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${shipCostSort ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}>
+                                  단가 정렬 {shipCostSort === 'asc' ? '▲' : shipCostSort === 'desc' ? '▼' : '⇅'}
+                                </button>
+                                <input type="text" placeholder="옵션 필터 (예: 10개)" value={shipFilter}
+                                  onChange={e => setShipFilter(e.target.value)}
+                                  className="px-3 py-1 border border-gray-300 rounded-full text-xs focus:outline-none focus:border-blue-400 w-40" />
+                              </p>
+                              <div className="space-y-2">
+                                {sortedShipments.filter(sh => {
+                                  if (!shipFilter.trim()) return true;
+                                  const q = shipFilter.trim().toLowerCase();
+                                  return (sh.option||'').toLowerCase().includes(q) || (sh.shipmentKey||'').toLowerCase().includes(q) || (sh.sku||'').toLowerCase().includes(q);
+                                }).map((sh, j) => {
+                                  const origIdx = relatedShipments.indexOf(sh);
+                                  const isSelected = sel.includes(origIdx);
+                                  const diff = sh.costPerUnit - avg;
+                                  const diffPct = avg > 0 ? Math.round((diff / avg) * 10000) / 100 : 0;
+                                  const cKey = `${sh.sku}_${sh.shipmentKey}`;
+                                  const isConfirmed = ccConfirmed[cKey];
+                                  const confirmedCost = ccMemos[cKey];
+                                  return (
+                                    <div key={j} className={`flex items-center gap-3 px-4 py-3 rounded-lg border text-sm transition-colors ${isSelected ? 'bg-blue-50 border-blue-400' : sh.isSelf ? 'bg-white border-gray-200' : 'bg-purple-50/50 border-purple-200'}`}>
+                                      <input type="checkbox" checked={isSelected} onChange={() => toggleSel(origIdx)} className="shrink-0" />
+                                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        <span className="font-bold text-[#1a2332] shrink-0">{sh.shipmentKey}</span>
+                                        {!sh.isSelf && <span className="px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded text-[10px] font-bold shrink-0">다른옵션</span>}
+                                        {sh.option && <span className="text-xs text-gray-400 truncate">{sh.option}</span>}
+                                        <span className="text-gray-300">|</span>
+                                        <span className="font-bold">{formatNum(sh.costPerUnit)}원</span>
+                                        <span className={`text-xs ${diff >= 0 ? 'text-red-500' : 'text-blue-600'}`}>({diffPct >= 0 ? '+' : ''}{diffPct}%)</span>
+                                        {isConfirmed && confirmedCost && <span className="text-xs font-bold text-green-600 ml-1">→ 확정 {formatNum(Number(confirmedCost))}원</span>}
+                                      </div>
+                                      <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                                        {costInputSku === cKey && !isConfirmed ? (
+                                          <>
+                                            <input type="number" placeholder="원가" autoFocus value={costInputVal}
+                                              onChange={e => setCostInputVal(e.target.value)}
+                                              className="w-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:border-blue-500 text-right" />
+                                            <span className="text-xs text-gray-400">원</span>
+                                            <button onClick={() => {
+                                              if (costInputVal) {
+                                                updateCcMemo(cKey, costInputVal);
+                                                setCcConfirmed(prev => { const next = {...prev, [cKey]: true}; localStorage.setItem('costcheck_confirmed', JSON.stringify(next)); return next; });
+                                                setCostInputSku(null);
+                                              }
+                                            }} className="px-2 py-1 bg-green-500 text-white rounded text-xs font-bold hover:bg-green-600">확정</button>
+                                            <button onClick={() => setCostInputSku(null)} className="px-2 py-1 bg-gray-200 text-gray-500 rounded text-xs font-bold">취소</button>
+                                          </>
+                                        ) : (
+                                          <button onClick={() => {
+                                            if (isConfirmed) {
+                                              setCcConfirmed(prev => { const next = {...prev}; delete next[cKey]; localStorage.setItem('costcheck_confirmed', JSON.stringify(next)); return next; });
+                                              updateCcMemo(cKey, '');
+                                            } else {
+                                              setCostInputSku(cKey);
+                                              setCostInputVal(String(Math.round(sh.costPerUnit)));
+                                            }
+                                          }} className={`px-2 py-1 rounded text-xs font-bold transition-colors ${isConfirmed ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'}`}>
+                                            {isConfirmed ? '원가 확정' : '원가입력'}
+                                          </button>
+                                        )}
+                                        <textarea placeholder="메모" rows={1} value={ccReasons[cKey] || ''}
+                                          onChange={e => { setCcReasons(prev => { const next = {...prev, [cKey]: e.target.value}; localStorage.setItem('costcheck_reasons', JSON.stringify(next)); return next; }); }}
+                                          onFocus={e => { e.target.rows = 5; e.target.style.width = '200px'; }}
+                                          onBlur={e => { e.target.rows = 1; e.target.style.width = '100px'; }}
+                                          className="w-[100px] px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-blue-400 resize-none transition-all" />
+                                        <textarea placeholder="해야할일" rows={1}
+                                          value={(() => { try { return JSON.parse(localStorage.getItem('costcheck_todos') || '{}')[cKey] || ''; } catch { return ''; } })()}
+                                          onChange={e => { const todos = JSON.parse(localStorage.getItem('costcheck_todos') || '{}'); todos[cKey] = e.target.value; localStorage.setItem('costcheck_todos', JSON.stringify(todos)); setCcConfirmed(p => ({...p})); }}
+                                          onFocus={e => { e.target.rows = 5; e.target.style.width = '200px'; }}
+                                          onBlur={e => { e.target.rows = 1; e.target.style.width = '100px'; }}
+                                          className="w-[100px] px-2 py-1 text-xs border border-orange-200 rounded focus:outline-none focus:border-orange-400 resize-none transition-all" />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* 선택 비교 */}
+                            {(() => {
+                              if (sel.length < 2) return <p className="text-sm text-gray-400 text-center py-4">비교할 출고건을 2~3개 선택하세요</p>;
+                              const selected = sel.map(i => relatedShipments[i]).filter(Boolean).sort((a, b) => a.costPerUnit - b.costPerUnit);
+                              if (selected.length < 2) return null;
+                              const lo = selected[0], hi = selected[selected.length - 1];
+                              const totalCostDiff = hi.costPerUnit - lo.costPerUnit;
+                              const tdiffPct = lo.costPerUnit > 0 ? Math.round((totalCostDiff / lo.costPerUnit) * 10000) / 100 : 0;
+                              const cCostKeys = ['purchasingFee','oceanFreight','documentFee','originCertFee','customsClearanceFee','customsDuty','vat','domesticTransport'];
+                              const cCostLabelsMap = { purchasingFee:'구매대행 수수료', oceanFreight:'해상운임', documentFee:'DOC FEE', originCertFee:'원산지증명서', customsClearanceFee:'통관수수료', customsDuty:'관세', vat:'부가세', domesticTransport:'내륙운송료' };
+                              const costDiffsArr = cCostKeys.map(k => ({ key: k, label: cCostLabelsMap[k], loCost: lo.costs?.[k]?.perUnit || 0, hiCost: hi.costs?.[k]?.perUnit || 0, diff: (hi.costs?.[k]?.perUnit || 0) - (lo.costs?.[k]?.perUnit || 0) }));
+                              const cnyDiff = (hi.unitPriceCny || 0) - (lo.unitPriceCny || 0);
+                              const descDiff = (loVal, hiVal, unit) => {
+                                const d = hiVal - loVal;
+                                if (Math.abs(d) < 1 && loVal === 0 && hiVal === 0) return { text: '—', cls: 'text-gray-400', note: '' };
+                                if (loVal === 0 && hiVal > 0) return { text: `${hi.shipmentKey}만 발생`, cls: 'text-red-500 font-semibold', note: '' };
+                                if (hiVal === 0 && loVal > 0) return { text: `${lo.shipmentKey}만 발생`, cls: 'text-blue-600 font-semibold', note: '' };
+                                if (Math.abs(d) < 1) return { text: '—', cls: 'text-gray-400', note: '' };
+                                const pct = loVal > 0 ? Math.round(Math.abs(d) / loVal * 1000) / 10 : 0;
+                                const arrow = d > 0 ? '▲' : '▼';
+                                const color = d > 0 ? 'text-red-500' : 'text-blue-600';
+                                let note = '';
+                                if (pct > 100) note = '이상치 의심';
+                                else if (pct > 50) note = '큰 차이';
+                                return { text: `${arrow} ${d > 0 ? '+' : ''}${formatNum(d)}${unit} (${pct}%)`, cls: `${color} font-semibold`, note };
+                              };
+                              return (
+                                <div>
+                                  {/* 비교 카드 */}
+                                  <div className={`grid gap-4 mb-5 ${selected.length >= 5 ? 'grid-cols-5' : selected.length === 4 ? 'grid-cols-4' : selected.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                                    {selected.map((sh, si) => {
+                                      const isLo = sh === lo, isHi = sh === hi;
+                                      const borderColor = isLo ? 'border-blue-200' : isHi ? 'border-red-200' : 'border-gray-200';
+                                      const tag = isLo ? '최저' : isHi ? '최고' : '';
+                                      const tagColor = isLo ? 'bg-blue-100 text-blue-700' : isHi ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700';
+                                      return (
+                                        <div key={si} className={`bg-white rounded-xl border-2 ${borderColor} p-5`}>
+                                          <div className="flex items-center justify-between mb-2">
+                                            <div>
+                                              <span className={`px-2.5 py-1 ${tagColor} rounded-full text-xs font-bold`}>{sh.shipmentKey}</span>
+                                              <span className="ml-2 text-xs text-gray-400">{tag ? `${tag} 원가` : '비교'}</span>
+                                              {sh.option && <span className="ml-2 text-xs text-gray-500 font-semibold">{sh.option}</span>}
+                                            </div>
+                                            <p className={`text-xl font-bold ${isHi ? 'text-red-500' : isLo ? 'text-blue-600' : 'text-[#1a2332]'}`}>{formatNum(sh.costPerUnit)}원</p>
+                                          </div>
+                                          <div className="grid grid-cols-3 gap-2 mb-3">
+                                            {[
+                                              ['단가', `${sh.unitPriceRaw || sh.unitPriceCny}`],
+                                              ['운임단가', `${sh.chinaShippingPerUnit || (sh.unitPriceCny && sh.unitPriceRaw ? Math.round((sh.unitPriceCny - sh.unitPriceRaw) * 100) / 100 : 0)}`],
+                                              ['출고수량', `${sh.shippedQty}개`],
+                                              ['CBM/개', sh.cbmPerUnit != null ? `${sh.cbmPerUnit}` : '—'],
+                                              ['해상운임', sh.costs?.oceanFreight?.perUnit ? `${formatNum(sh.costs.oceanFreight.perUnit)}` : '—'],
+                                              ['환율', sh.exchangeRate ? `${sh.exchangeRate}` : '—'],
+                                            ].map(([label, val], idx) => {
+                                              const loSh = selected[0];
+                                              const getShipping = (s2) => s2.chinaShippingPerUnit || (s2.unitPriceCny && s2.unitPriceRaw ? Math.round((s2.unitPriceCny - s2.unitPriceRaw) * 100) / 100 : 0);
+                                              const vals = [
+                                                [sh.unitPriceRaw || sh.unitPriceCny, loSh.unitPriceRaw || loSh.unitPriceCny],
+                                                [getShipping(sh), getShipping(loSh)],
+                                                [sh.shippedQty, loSh.shippedQty],
+                                                [sh.cbmPerUnit, loSh.cbmPerUnit],
+                                                [sh.costs?.oceanFreight?.perUnit || 0, loSh.costs?.oceanFreight?.perUnit || 0],
+                                                [sh.exchangeRate, loSh.exchangeRate],
+                                              ];
+                                              const isHigher = isHi && vals[idx] && Number(vals[idx][0]) > Number(vals[idx][1]);
+                                              return (
+                                                <div key={idx} className="text-center">
+                                                  <p className="text-xs text-gray-400 mb-0.5">{label}</p>
+                                                  <p className={`text-base font-bold ${isHigher ? 'text-red-500' : 'text-[#1a2332]'}`}>{val}</p>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                          {isHi && <p className="text-center text-red-500 font-bold text-base">▲ +{formatNum(totalCostDiff)}원 (+{tdiffPct}%)</p>}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+
+                                  {/* 이유 분석 */}
+                                  {(() => {
+                                    const analyses = [];
+                                    const rate = hi.exchangeRate || lo.exchangeRate || 195;
+                                    const higherCosts = costDiffsArr.filter(cd => cd.diff > 10).sort((a, b) => b.diff - a.diff);
+                                    if (cnyDiff > 0) {
+                                      const impact = Math.round(cnyDiff * rate);
+                                      analyses.push({ title: '단가 인상', summary: `${lo.unitPriceCny}위안 → ${hi.unitPriceCny}위안으로 개당 +${formatNum(impact)}원 증가`, impact, details: [`${hi.shipmentKey}의 단가가 ${lo.shipmentKey}보다 ${Math.round(cnyDiff * 100) / 100}위안 높음`, `원화 환산 시 개당 약 +${formatNum(impact)}원 상승 요인`] });
+                                    }
+                                    if (hi.shippedQty < lo.shippedQty) {
+                                      analyses.push({ title: '수량 감소 → 고정비 배분 증가', summary: `${lo.shippedQty}개 → ${hi.shippedQty}개로 ${lo.shippedQty - hi.shippedQty}개 감소`, impact: 0, details: ['수량이 적을수록 해상운임·통관비 등 고정비가 개당 더 많이 배분됨', '각 비용 항목 상승의 간접 원인'] });
+                                    }
+                                    if (hi.cbmPerUnit && lo.cbmPerUnit && hi.cbmPerUnit > lo.cbmPerUnit) {
+                                      const ratio = lo.cbmPerUnit > 0 ? hi.cbmPerUnit / lo.cbmPerUnit : 0;
+                                      const oceanHi = hi.costs?.oceanFreight?.perUnit || 0, oceanLo = lo.costs?.oceanFreight?.perUnit || 0;
+                                      const impact = Math.round(oceanHi - oceanLo);
+                                      if (ratio > 2) {
+                                        analyses.push({ title: '해상운임 상승 (CBM 이상값 의심)', summary: `${formatNum(oceanLo)}원 → ${formatNum(oceanHi)}원으로 개당 +${formatNum(impact)}원 증가`, impact, details: [`${hi.shipmentKey}의 CBM ${hi.cbmPerUnit} vs ${lo.shipmentKey}의 CBM ${lo.cbmPerUnit} → ${Math.round(ratio)}배 차이`], warn: true });
+                                      } else if (oceanHi > oceanLo) {
+                                        analyses.push({ title: 'CBM 증가 → 해상운임 상승', summary: `${formatNum(oceanLo)}원 → ${formatNum(oceanHi)}원으로 개당 +${formatNum(impact)}원 상승`, impact, details: [`개당 CBM: ${lo.cbmPerUnit} → ${hi.cbmPerUnit}로 상승`] });
+                                      }
+                                    }
+                                    const hasCbmIssue = analyses.some(a => a.title.includes('CBM'));
+                                    for (const cd of higherCosts) {
+                                      if (hasCbmIssue && cd.key === 'oceanFreight') continue;
+                                      if (analyses.length >= 5) break;
+                                      const details = [];
+                                      if (cd.key === 'oceanFreight') {
+                                        if (hi.cbmPerUnit && lo.cbmPerUnit && hi.cbmPerUnit !== lo.cbmPerUnit) details.push(`개당 CBM: ${lo.cbmPerUnit} → ${hi.cbmPerUnit}`);
+                                        if (hi.shippedQty < lo.shippedQty) details.push(`수량 ${lo.shippedQty}개 → ${hi.shippedQty}개 감소로 고정비 배분 증가`);
+                                        if (!details.length) details.push('출고건별 총 해상운임 또는 CBM 비율 차이로 인한 배분 변동');
+                                      } else if (cd.key === 'domesticTransport') {
+                                        if (hi.shippedQty < lo.shippedQty) details.push(`수량 ${lo.shippedQty}개 → ${hi.shippedQty}개 감소로 내륙운송비 개당 배분 증가`);
+                                        if (!details.length) details.push('출고건별 총 내륙운송비 또는 수량/CBM 차이로 배분 변동');
+                                      } else if (cd.key === 'vat') {
+                                        details.push('부가세는 (상품원가 + 관세) × 10%로 계산');
+                                      } else if (cd.key === 'customsDuty') {
+                                        details.push('관세는 상품원가 × 관세율로 계산');
+                                      } else if (cd.key === 'purchasingFee') {
+                                        details.push('구매대행 수수료는 총금액의 1%로 계산');
+                                      } else {
+                                        details.push('출고건별 비용 차이 또는 배분 비율 변동');
+                                      }
+                                      analyses.push({ title: `${cd.label} 상승`, summary: `${formatNum(cd.loCost)}원 → ${formatNum(cd.hiCost)}원으로 개당 +${formatNum(cd.diff)}원 증가`, impact: Math.round(cd.diff), details });
+                                    }
+                                    analyses.sort((a, b) => (b.impact || 0) - (a.impact || 0));
+                                    if (analyses.length === 0) return null;
+                                    return (
+                                      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
+                                        <h4 className="text-sm font-bold text-red-600 mb-4">이유 분석</h4>
+                                        <div className="space-y-6">
+                                          {analyses.map((a, ai) => (
+                                            <div key={ai} className={`flex items-start gap-3 text-sm ${a.warn ? 'p-3 bg-orange-50 rounded-lg border border-orange-200' : ''}`}>
+                                              <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white ${a.warn ? 'bg-orange-500' : 'bg-[#1a2332]'}`}>{ai + 1}</span>
+                                              <div>
+                                                <p className="font-bold text-[#1a2332] mb-0.5">{a.title}</p>
+                                                <p className="text-red-500 font-semibold mb-1">{a.summary}</p>
+                                                {a.details && a.details.map((d, di) => <p key={di} className="text-[#1a2332] text-sm leading-relaxed">{di + 1}) {d}</p>)}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+
+                                  {/* 항목별 비교표 */}
+                                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-5">
+                                    <div className="px-5 py-3 bg-[#f5f6fa] border-b border-gray-200">
+                                      <h4 className="text-sm font-bold text-[#1a2332]">항목별 비교표</h4>
+                                    </div>
+                                    <table className="text-sm w-full">
+                                      <thead>
+                                        <tr className="border-b border-gray-200 bg-gray-50/50">
+                                          <th className="px-4 py-2.5 text-left font-semibold text-gray-500" style={{width:'28%'}}>항목</th>
+                                          <th className="px-4 py-2.5 text-right font-semibold text-blue-600" style={{width:'24%'}}>{lo.shipmentKey}</th>
+                                          <th className="px-4 py-2.5 text-right font-semibold text-red-500" style={{width:'24%'}}>{hi.shipmentKey}</th>
+                                          <th className="px-4 py-2.5 text-right font-semibold text-gray-500 cursor-pointer hover:text-blue-600 select-none" style={{width:'24%'}}
+                                            onClick={() => setCompareSort(p => p === null ? 'desc' : p === 'desc' ? 'asc' : null)}>
+                                            차이 {compareSort === 'desc' ? '▼' : compareSort === 'asc' ? '▲' : '⇅'}
+                                          </th>
+                                        </tr>
+                                        <tr className="bg-[#f5f6fa] font-bold border-b border-gray-200">
+                                          <td className="px-4 py-3 text-[#1a2332]">수입원가 (개당)</td>
+                                          <td className="px-4 py-3 text-right text-blue-600">{formatNum(lo.costPerUnit)}원</td>
+                                          <td className="px-4 py-3 text-right text-red-500">{formatNum(hi.costPerUnit)}원</td>
+                                          <td className="px-4 py-3 text-right text-red-500 text-xs">▲ +{formatNum(totalCostDiff)}원 (+{tdiffPct}%)</td>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {(() => {
+                                          const rows = [
+                                            { label: '단가(CNY)', loVal: lo.unitPriceCny, hiVal: hi.unitPriceCny, unit: '위안', decimal: 2 },
+                                            { label: '수수료1%', loVal: lo.costs?.purchasingFee?.perUnit, hiVal: hi.costs?.purchasingFee?.perUnit, unit: '원', isCost: true },
+                                            { label: '해상운임', loVal: lo.costs?.oceanFreight?.perUnit, hiVal: hi.costs?.oceanFreight?.perUnit, unit: '원', isCost: true },
+                                            { label: 'DOC FEE', loVal: lo.costs?.documentFee?.perUnit, hiVal: hi.costs?.documentFee?.perUnit, unit: '원', isCost: true },
+                                            { label: '원산지증명서', loVal: lo.costs?.originCertFee?.perUnit, hiVal: hi.costs?.originCertFee?.perUnit, unit: '원', isCost: true },
+                                            { label: '통관수수료', loVal: lo.costs?.customsClearanceFee?.perUnit, hiVal: hi.costs?.customsClearanceFee?.perUnit, unit: '원', isCost: true },
+                                            { label: '관세', loVal: lo.costs?.customsDuty?.perUnit, hiVal: hi.costs?.customsDuty?.perUnit, unit: '원', isCost: true },
+                                            { label: '부가세', loVal: lo.costs?.vat?.perUnit, hiVal: hi.costs?.vat?.perUnit, unit: '원', isCost: true },
+                                            { label: '내륙운송료', loVal: lo.costs?.domesticTransport?.perUnit, hiVal: hi.costs?.domesticTransport?.perUnit, unit: '원', isCost: true },
+                                          ];
+                                          const rowsWithDiff = rows.map(r => ({ ...r, diff: (r.hiVal || 0) - (r.loVal || 0) }));
+                                          if (compareSort === 'asc') rowsWithDiff.sort((a, b) => a.diff - b.diff);
+                                          else if (compareSort === 'desc') rowsWithDiff.sort((a, b) => b.diff - a.diff);
+                                          const fmtN = (v, decimal) => v == null ? '—' : decimal === 0 ? Math.round(v) : Math.round(v * Math.pow(10, decimal)) / Math.pow(10, decimal);
+                                          return rowsWithDiff.map((r, ri) => {
+                                            const lv = r.loVal || 0, hv = r.hiVal || 0;
+                                            const d = r.isCost ? descDiff(lv, hv, r.unit) : null;
+                                            const fmtVal = (v) => r.isCost ? `${formatNum(v)}${r.unit}` : `${fmtN(v, r.decimal)}${r.unit}`;
+                                            const fmtDiffVal = (v) => r.isCost ? formatNum(Math.abs(v)) : fmtN(Math.abs(v), r.decimal);
+                                            return (
+                                              <tr key={ri} className={`border-b border-gray-50 ${d && d.note ? 'bg-yellow-50/40' : ''}`}>
+                                                <td className="px-4 py-2.5 font-semibold text-gray-700">{r.label}</td>
+                                                <td className="px-4 py-2.5 text-right">{fmtVal(lv)}</td>
+                                                <td className="px-4 py-2.5 text-right">{fmtVal(hv)}</td>
+                                                <td className={`px-4 py-2.5 text-right text-xs ${d ? d.cls : ''}`}>
+                                                  {d ? <>{d.text}{d.note && <span className="block text-orange-500 text-[11px]">{d.note}</span>}</>
+                                                    : Math.abs(r.diff) >= 0.01
+                                                      ? <span className={`font-semibold ${r.diff > 0 ? 'text-red-500' : 'text-blue-600'}`}>{r.diff > 0 ? '▲' : '▼'} {fmtDiffVal(r.diff)}{r.unit}</span>
+                                                      : <span className="text-gray-400">—</span>}
+                                                </td>
+                                              </tr>
+                                            );
+                                          });
+                                        })()}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                          </div>
+                        </td></tr>
+                      );
+                    })()}
                   </>
                 ) : (
                   filtered.slice(0, displayCount).map((row, i) => {
@@ -488,6 +867,7 @@ export default function ConfirmedCbmPage() {
                         <td className="px-3 py-2 text-center font-bold text-blue-700">{formatNum(row.costPerUnit)}원</td>
                         <td className="px-3 py-2 text-center font-bold text-purple-700">{row.avgCost ? formatNum(row.avgCost) + '원' : '-'}</td>
                         <td className={`px-3 py-2 text-center font-bold ${row.avgVsMin > 0 ? 'text-red-600' : row.avgVsMin < 0 ? 'text-blue-600' : ''}`}>{row.avgVsMin > 0 ? '+' : ''}{row.avgVsMin}%</td>
+                        <td className={`px-3 py-2 text-center font-bold ${row.costRange > 0 ? 'text-orange-600' : ''}`}>{row.costRange ? formatNum(row.costRange) + '원' : '-'}</td>
                         <td className="px-3 py-2 text-center font-bold">{formatNum(row.costX285)}원</td>
                         <td className={`px-3 py-2 text-center font-bold ${row.costDiff >= 0 ? 'text-red-600' : 'text-blue-600'}`}>{row.costDiff >= 0 ? '+' : ''}{formatNum(row.costDiff)}원</td>
                         {costKeys.map(k => <td key={k} className="px-3 py-2 text-center">{formatNum(row.costs?.[k]?.perUnit)}원</td>)}
