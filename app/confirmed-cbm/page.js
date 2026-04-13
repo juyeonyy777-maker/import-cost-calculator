@@ -517,10 +517,10 @@ export default function ConfirmedCbmPage() {
                           }
                         }
                       }
-                      const sel = selectedShipments[sku] || (currentRow.subRows.length === 2 ? [0, 1] : []);
+                      const sel = selectedShipments[sku] || (currentRow.subRows.length >= 2 ? [0, 1] : []);
                       const toggleSel = (idx) => {
                         setSelectedShipments(prev => {
-                          const cur = prev[sku] || (currentRow.subRows.length === 2 ? [0, 1] : []);
+                          const cur = prev[sku] || (currentRow.subRows.length >= 2 ? [0, 1] : []);
                           const next = cur.includes(idx) ? cur.filter(i => i !== idx) : [...cur, idx].slice(-5);
                           return { ...prev, [sku]: next };
                         });
