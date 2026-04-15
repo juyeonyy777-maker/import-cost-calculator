@@ -44,6 +44,7 @@ export default function ConfirmedCbmPage() {
   const [displayCount, setDisplayCount] = useState(100);
   const [expandedSku, setExpandedSku] = useState(null);
   const [cbmFilter, setCbmFilter] = useState('all');
+  const [confirmFilter, setConfirmFilter] = useState('all'); // 'all' | 'confirmed' | 'unconfirmed'
   const [confirmedSkus, setConfirmedSkus] = useState(new Set());
   const [compareSort, setCompareSort] = useState(null);
   const [shipDateSort, setShipDateSort] = useState(null);
@@ -300,6 +301,13 @@ export default function ConfirmedCbmPage() {
       });
     }
 
+    // 확인완료 필터
+    if (confirmFilter === 'confirmed') {
+      result = result.filter(r => confirmedSkus.has(r.sku));
+    } else if (confirmFilter === 'unconfirmed') {
+      result = result.filter(r => !confirmedSkus.has(r.sku));
+    }
+
     if (sortKey && sortDir) {
       result = [...result].sort((a, b) => {
         let va, vb;
@@ -319,7 +327,7 @@ export default function ConfirmedCbmPage() {
     }
 
     return result;
-  }, [allRows, debouncedSearch, searched, sortKey, sortDir, cbmFilter, skuGroups]);
+  }, [allRows, debouncedSearch, searched, sortKey, sortDir, cbmFilter, confirmFilter, confirmedSkus, skuGroups]);
 
   const handleSort = (key) => {
     if (sortKey === key) {
@@ -379,6 +387,25 @@ export default function ConfirmedCbmPage() {
             </button>
           ))}
           {cbmFilter !== 'all' && <span className="text-sm font-bold text-blue-600 ml-2">{filtered.length}건</span>}
+        </div>
+        <div className="flex items-center justify-center gap-2 mt-3 pt-3 border-t border-gray-200">
+          <span className="text-sm font-bold text-gray-700">확인완료 필터:</span>
+          {[
+            { key: 'all', label: '전체', activeBg: 'bg-blue-600 border-blue-600' },
+            { key: 'confirmed', label: '확인완료', activeBg: 'bg-green-600 border-green-600' },
+            { key: 'unconfirmed', label: '미확인', activeBg: 'bg-gray-600 border-gray-600' },
+          ].map(opt => (
+            <button key={opt.key} onClick={() => { setConfirmFilter(opt.key); setDisplayCount(100); }}
+              className={`px-4 py-2 rounded-lg text-sm font-bold border-2 transition-colors ${
+                confirmFilter === opt.key
+                  ? opt.activeBg + ' text-white'
+                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+              }`}>
+              {opt.key === 'confirmed' && <span className={`${confirmFilter === opt.key ? 'text-white' : 'text-green-600'} mr-1`}>✓</span>}
+              {opt.label}
+            </button>
+          ))}
+          {confirmFilter !== 'all' && <span className="text-sm font-bold text-blue-600 ml-2">{filtered.length}건</span>}
         </div>
       </div>
 
