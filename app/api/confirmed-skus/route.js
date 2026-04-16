@@ -19,10 +19,14 @@ export async function GET() {
 
 export async function POST(request) {
   try {
-    const { action, sku } = await request.json();
+    const { action, sku, skus } = await request.json();
     const list = load();
     if (action === 'confirm' && !list.includes(sku)) {
       list.push(sku);
+    } else if (action === 'confirm-bulk' && Array.isArray(skus)) {
+      for (const s of skus) {
+        if (!list.includes(s)) list.push(s);
+      }
     } else if (action === 'unconfirm') {
       const idx = list.indexOf(sku);
       if (idx >= 0) list.splice(idx, 1);
