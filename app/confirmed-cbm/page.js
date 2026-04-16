@@ -576,16 +576,16 @@ export default function ConfirmedCbmPage() {
               <tbody>
                 {expandedSku ? (
                   <>
-                    <tr className="bg-gray-100 cursor-pointer hover:bg-gray-200 transition-colors">
-                      <td className="px-3 py-2.5 text-center text-gray-400" onClick={() => toggleExpand(expandedSku)}>▲</td>
-                      <td className="px-3 py-2.5 text-center" onClick={e => e.stopPropagation()}>
+                    <tr className="bg-gray-100">
+                      <td className="px-3 py-2.5 text-center text-gray-400 cursor-pointer hover:text-blue-600" onClick={() => toggleExpand(expandedSku)}>▲</td>
+                      <td className="px-3 py-2.5 text-center">
                         {confirmedSkus.has(expandedSku) ? (
                           <span className="text-[10px] font-bold text-green-600 whitespace-nowrap">확인완료</span>
                         ) : (
                           <input type="checkbox" checked={false} onChange={() => toggleConfirmSku(expandedSku)} className="w-4 h-4 cursor-pointer accent-blue-600" />
                         )}
                       </td>
-                      <td colSpan={999} className="px-3 py-2.5 font-bold text-sm" onClick={() => toggleExpand(expandedSku)}>
+                      <td colSpan={999} className="px-3 py-2.5 font-bold text-sm">
                         {expandedSku} — {skuGroups[expandedSku]?.labelName} ({skuGroups[expandedSku]?.rows.length}건)
                       </td>
                     </tr>
@@ -1002,8 +1002,8 @@ export default function ConfirmedCbmPage() {
                     const group = skuGroups[row.sku];
                     const hasMultiple = group && group.rows.length > 1;
                     return (
-                      <tr key={i} className={`${showRecommend && recommendedSkus.has(row.sku) ? 'bg-yellow-100' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${hasMultiple ? 'cursor-pointer hover:bg-blue-50/30 transition-colors' : ''}`} onClick={() => hasMultiple && toggleExpand(row.sku)}>
-                        <td className="px-3 py-2.5 text-center text-gray-400">{hasMultiple ? '▼' : ''}</td>
+                      <tr key={i} className={`${showRecommend && recommendedSkus.has(row.sku) ? 'bg-yellow-100' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                        <td className={`px-3 py-2.5 text-center text-gray-400 ${hasMultiple ? 'cursor-pointer hover:text-blue-600' : ''}`} onClick={() => hasMultiple && toggleExpand(row.sku)}>{hasMultiple ? '▼' : ''}</td>
                         <td className="px-3 py-2 text-center" onClick={e => e.stopPropagation()}>
                           {confirmedSkus.has(row.sku) ? (
                             <span className="text-[10px] font-bold text-green-600 whitespace-nowrap">확인완료</span>
