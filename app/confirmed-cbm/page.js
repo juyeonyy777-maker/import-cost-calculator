@@ -209,7 +209,7 @@ export default function ConfirmedCbmPage() {
         skuMap[r.sku] = {
           sku: r.sku, productName: r.productName, labelName: r.labelName || r.productName,
           shippedQty: 0, shipCount: r.shipCount, avgCost: r.avgCost,
-          cbmConfirmed: true, totalCbm: 0,
+          totalBoxCount: 0, uniformBoxQty: false, qtyPerBox: 0, cbmConfirmed: true, totalCbm: 0,
           totalCostWeighted: 0, totalCnyWeighted: 0, totalUnitPriceRaw: 0,
           costs: {},
           subRows: [],
@@ -218,6 +218,8 @@ export default function ConfirmedCbmPage() {
       const agg = skuMap[r.sku];
       const isExcluded = excludedKeys.has(`${r.sku}__${r.shipmentKey}`);
       r._excluded = isExcluded;
+      agg.totalBoxCount += (r.boxCount || 1);
+      if (r.uniformBoxQty) { agg.uniformBoxQty = true; agg.qtyPerBox = r.qtyPerBox || 0; }
       if (!isExcluded) {
         agg.shippedQty += r.shippedQty;
         agg.totalCbm += (r.cbmPerUnit || 0) * r.shippedQty;
@@ -251,7 +253,7 @@ export default function ConfirmedCbmPage() {
       const costRange = (maxCost && minCost < Infinity) ? maxCost - minCost : 0;
       return {
         sku: agg.sku, productName: agg.productName, labelName: agg.labelName,
-        shippedQty: agg.shippedQty, shipCount: agg.shipCount, avgCost: agg.avgCost,
+        shippedQty: agg.shippedQty, shipCount: agg.shipCount, avgCost: agg.avgCost, totalBoxCount: agg.totalBoxCount, uniformBoxQty: agg.uniformBoxQty, qtyPerBox: agg.qtyPerBox,
         minCost, avgVsMin, costRange,
         cbmPerUnit: Math.round(cbmPerUnit * 10000) / 10000,
         cbmConfirmed: agg.cbmConfirmed,
@@ -434,26 +436,6 @@ export default function ConfirmedCbmPage() {
           <button onClick={() => setSearched(true)} className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700">조회</button>
         </div>
         <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t border-gray-200">
-          <span className="text-sm font-bold text-gray-700">개별CBM 필터:</span>
-          {[
-            { key: 'all', label: '전체', color: '', activeBg: 'bg-blue-600 border-blue-600' },
-            { key: 'confirmed', label: 'CBM 확정', color: 'text-gray-900', activeBg: 'bg-gray-800 border-gray-800' },
-            { key: 'semi', label: 'CBM 준확정', color: 'text-amber-500', activeBg: 'bg-amber-500 border-amber-500' },
-            { key: 'estimated', label: 'CBM 추정', color: 'text-red-500', activeBg: 'bg-red-500 border-red-500' },
-          ].map(opt => (
-            <button key={opt.key} onClick={() => { setCbmFilter(opt.key); setDisplayCount(100); }}
-              className={`px-4 py-2 rounded-lg text-sm font-bold border-2 transition-colors ${
-                cbmFilter === opt.key
-                  ? opt.activeBg + ' text-white'
-                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-              }`}>
-              {opt.color && <span className={`${cbmFilter === opt.key ? 'text-white' : opt.color} mr-1`}>●</span>}
-              {opt.label}
-            </button>
-          ))}
-          <span className="text-sm font-bold text-blue-600 ml-2">{cbmCounts[cbmFilter]}건</span>
-        </div>
-        <div className="flex items-center justify-center gap-2 mt-3 pt-3 border-t border-gray-200">
           <span className="text-sm font-bold text-gray-700">확인완료 필터:</span>
           {[
             { key: 'all', label: '전체', activeBg: 'bg-blue-600 border-blue-600' },
@@ -474,8 +456,9 @@ export default function ConfirmedCbmPage() {
         </div>
       </div>
 
-      {!loading && filtered.length > 0 && (
-        <div className="mb-3">
+      {!loading && filtered.length > 0 && (<>
+        <div className="mb-3 flex items-start justify-between">
+          <div className="flex flex-wrap items-center gap-2">
           <button onClick={async () => {
             const XLSX = await import('xlsx');
             const wb = XLSX.utils.book_new();
@@ -493,22 +476,70 @@ export default function ConfirmedCbmPage() {
           }} className="px-5 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700">
             EXCEL 다운 ({filtered.length}건)
           </button>
+          {cbmFilter !== 'all' && cbmFilter !== 'estimated' && (<>
           <button onClick={() => {
-            const candidates = filtered.filter(r => !confirmedSkus.has(r.sku) && r.shipCount >= 2 && r.costRange <= 300 && r.cbmConfirmed !== false);
+            const candidates = cbmFilter === 'semi'
+              ? filtered.filter(r => !confirmedSkus.has(r.sku) && r.shipCount >= 2 && r.costRange <= 300)
+              : filtered.filter(r => !confirmedSkus.has(r.sku) && r.shipCount >= 2 && r.costRange <= 300 && r.cbmConfirmed !== false);
             if (candidates.length === 0) { alert('조건에 맞는 SKU가 없습니다.'); return; }
             setRecommendedSkus(new Set(candidates.map(r => r.sku)));
             setShowRecommend(true);
-          }} className="group relative px-5 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 ml-2">
-            자동추천 확인완료
-            <span className="invisible group-hover:visible absolute left-1/2 -translate-x-1/2 top-full mt-1 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-bold text-black whitespace-nowrap shadow-lg z-50">
+            setConfirmFilter('unconfirmed');
+          }} className={`group relative px-5 py-2 text-white rounded-lg text-sm font-semibold ml-2 ${cbmFilter === 'semi' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-purple-600 hover:bg-purple-700'}`}>
+            {cbmFilter === 'semi' ? '자동추천 3' : '자동추천 1'}
+            <span className="invisible group-hover:visible absolute left-1/2 -translate-x-1/2 top-full mt-1 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-black whitespace-nowrap shadow-lg z-50">
               출고 2회 이상 + 원가편차 300원 이하
             </span>
           </button>
-          {showRecommend && recommendedSkus.size > 0 && (
+          {cbmFilter !== 'semi' && (
+          <button onClick={() => {
+            const candidates = filtered.filter(r => !confirmedSkus.has(r.sku) && r.shipCount === 1 && r.totalBoxCount >= 2 && r.uniformBoxQty);
+            if (candidates.length === 0) { alert('조건에 맞는 SKU가 없습니다.'); return; }
+            setRecommendedSkus(new Set(candidates.map(r => r.sku)));
+            setShowRecommend(true);
+            setConfirmFilter('unconfirmed');
+          }} className="group relative px-5 py-2 bg-orange-500 text-white rounded-lg text-sm font-semibold hover:bg-orange-600 ml-2">
+            자동추천 2
+            <span className="invisible group-hover:visible absolute left-1/2 -translate-x-1/2 top-full mt-1 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-black whitespace-nowrap shadow-lg z-50">
+              출고 1회 + 박스 2개 이상 + 동일입수량
+            </span>
+          </button>
+          )}
+          </>)}
+          {cbmFilter !== 'all' && (
+          <button onClick={() => setConfirmFilter(confirmFilter === 'unconfirmed' ? 'all' : 'unconfirmed')}
+            className={`px-5 py-2 rounded-lg text-sm font-semibold ml-2 ${confirmFilter === 'unconfirmed' ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+            미확인
+          </button>
+          )}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-gray-700">개별CBM:</span>
+            {[
+              { key: 'all', label: '전체', color: '', activeBg: 'bg-blue-600 border-blue-600' },
+              { key: 'confirmed', label: '확정', color: 'text-gray-900', activeBg: 'bg-gray-800 border-gray-800', desc: '모든 출고건에 CBM 있음' },
+              { key: 'semi', label: '준확정', color: 'text-amber-500', activeBg: 'bg-amber-500 border-amber-500', desc: '출고건 중 절반 이상 CBM 있음, 나머지 없음' },
+              { key: 'estimated', label: '추정', color: 'text-red-500', activeBg: 'bg-red-500 border-red-500', desc: 'CBM 없거나 절반 미만만 있음' },
+            ].map(opt => (
+              <button key={opt.key} onClick={() => { setCbmFilter(opt.key); setDisplayCount(100); }}
+                className={`group relative px-3 py-1.5 rounded-lg text-sm font-bold border-2 transition-colors ${
+                  cbmFilter === opt.key
+                    ? opt.activeBg + ' text-white'
+                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                }`}>
+                {opt.color && <span className={`${cbmFilter === opt.key ? 'text-white' : opt.color} mr-1`}>●</span>}
+                {opt.label}
+                {opt.desc && <span className="invisible group-hover:visible absolute left-1/2 -translate-x-1/2 top-full mt-1 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-black whitespace-nowrap shadow-lg z-50">{opt.desc}</span>}
+              </button>
+            ))}
+            <span className="text-sm font-bold text-blue-600">{cbmCounts[cbmFilter]}건</span>
+          </div>
+        </div>
+        {showRecommend && recommendedSkus.size > 0 && (
             <div className="mt-3 p-4 bg-yellow-50 border-2 border-yellow-300 rounded-xl">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <span className="text-sm font-bold text-yellow-800">추천 조건: 출고 2회 이상 + 원가편차 300원 이하 + 미확인</span>
+                  <span className="text-sm font-bold text-yellow-800">추천 조건: 출고 1회 + 박스 2개 이상 + 동일입수량 + 미확인</span>
                   <span className="text-sm font-bold text-purple-600 ml-3">{recommendedSkus.size}건 선택됨</span>
                 </div>
                 <div className="flex gap-2">
@@ -534,17 +565,18 @@ export default function ConfirmedCbmPage() {
                 <table className="text-sm">
                   <tbody>
                     {filtered.filter(r => recommendedSkus.has(r.sku)).map(r => (
-                      <tr key={r.sku} className="hover:bg-yellow-100 cursor-pointer" onClick={() => setRecommendedSkus(prev => {
+                      <tr key={r.sku} className="hover:bg-yellow-100">
+                        <td className="px-2 py-2"><input type="checkbox" checked={recommendedSkus.has(r.sku)} onChange={() => setRecommendedSkus(prev => {
                         const next = new Set(prev);
                         if (next.has(r.sku)) next.delete(r.sku); else next.add(r.sku);
                         return next;
-                      })}>
-                        <td className="px-2 py-2"><input type="checkbox" checked={recommendedSkus.has(r.sku)} readOnly className="w-4 h-4 accent-purple-600" /></td>
+                      })} className="w-4 h-4 accent-purple-600 cursor-pointer" /></td>
                         <td className="px-2 py-2 font-mono font-bold whitespace-nowrap">{r.sku}</td>
                         <td className="px-2 py-2 text-gray-500 whitespace-nowrap">{r.labelName || r.productName}</td>
                         <td className="px-2 py-2 whitespace-nowrap">출고 {r.shipCount}회</td>
                         <td className="px-2 py-2 whitespace-nowrap">편차 {formatNum(r.costRange)}원</td>
                         <td className="px-2 py-2 whitespace-nowrap font-bold">원가 {formatNum(r.costPerUnit)}원</td>
+                        <td className="px-2 py-2 whitespace-nowrap text-gray-600">/ 총수량 {formatNum(r.shippedQty)} 박스수 {r.totalBoxCount || (r.subRows ? r.subRows.length : 1)} 입수량 {r.qtyPerBox || '-'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -552,8 +584,7 @@ export default function ConfirmedCbmPage() {
               </div>
             </div>
           )}
-        </div>
-      )}
+      </>)}
 
       {loading ? <p className="text-gray-500 text-center py-10">로딩중...</p> : filtered.length === 0 ? (
         <p className="text-gray-500 text-center py-10">{searched ? '검색 결과 없음' : '저장된 데이터 없음'}</p>
