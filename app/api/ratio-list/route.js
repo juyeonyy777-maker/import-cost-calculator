@@ -12,16 +12,17 @@ export async function GET() {
     const list = [];
     for (const [key, entry] of Object.entries(allData)) {
       if (!entry.rows) continue;
-      const ratios = [];
+      let totalCost = 0, totalRaw = 0;
       for (const r of entry.rows) {
-        if (r.unitPriceCny > 0 && r.costPerUnit > 0) {
-          ratios.push(r.costPerUnit / r.unitPriceCny);
+        if (r.unitPriceRaw > 0 && r.costPerUnit > 0) {
+          totalCost += r.costPerUnit * r.shippedQty;
+          totalRaw += r.unitPriceRaw * r.shippedQty;
         }
       }
-      if (ratios.length > 0) {
+      if (totalRaw > 0) {
         list.push({
           key,
-          avg: Math.round(ratios.reduce((s, r) => s + r, 0) / ratios.length * 100) / 100,
+          avg: Math.round(totalCost / totalRaw * 100) / 100,
           skuCount: entry.rows.length,
           savedAt: entry.savedAt || '',
         });

@@ -213,24 +213,25 @@ export async function POST(request) {
           .sort((a, b) => b.dateNum - a.dateNum)
           .slice(0, 5);
 
-        const allRatios = [];
+        let allTotalCost = 0, allTotalRaw = 0;
         const detail = [];
         for (const s of shipments) {
-          const ratios = [];
+          let sCost = 0, sRaw = 0;
           for (const r of s.rows) {
-            if (r.unitPriceCny > 0 && r.costPerUnit > 0) {
-              const ratio = r.costPerUnit / r.unitPriceCny;
-              allRatios.push(ratio);
-              ratios.push(ratio);
+            if (r.unitPriceRaw > 0 && r.costPerUnit > 0) {
+              sCost += r.costPerUnit * r.shippedQty;
+              sRaw += r.unitPriceRaw * r.shippedQty;
             }
           }
-          if (ratios.length > 0) {
-            detail.push({ key: s.key, avg: Math.round(ratios.reduce((a, b) => a + b, 0) / ratios.length * 100) / 100 });
+          if (sRaw > 0) {
+            allTotalCost += sCost;
+            allTotalRaw += sRaw;
+            detail.push({ key: s.key, avg: Math.round(sCost / sRaw * 100) / 100 });
           }
         }
-        if (allRatios.length > 0) {
+        if (allTotalRaw > 0) {
           recent5AvgRatio = {
-            avg: Math.round(allRatios.reduce((s, r) => s + r, 0) / allRatios.length * 100) / 100,
+            avg: Math.round(allTotalCost / allTotalRaw * 100) / 100,
             detail,
           };
         }

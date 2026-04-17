@@ -51,8 +51,10 @@ export default function TodoPage() {
 
   useEffect(() => { (async () => {
     try {
-      const todosData = JSON.parse(localStorage.getItem('costcheck_todos') || '{}');
-      const reasonsData = JSON.parse(localStorage.getItem('costcheck_reasons') || '{}');
+      const ccRes = await fetch('/api/costcheck-data');
+      const ccData = await ccRes.json();
+      const todosData = ccData.todos || {};
+      const reasonsData = ccData.reasons || {};
       const res = await fetch('/api/save-all');
       const allData = await res.json();
       const items = [];

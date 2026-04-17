@@ -187,7 +187,7 @@ export default function DataPage() {
   return (
     <div className="max-w-full mx-auto px-4 py-8">
       <header className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">전체 데이터</h1>
+        <h1 className="text-2xl font-bold text-gray-900">원가 계산 원본</h1>
         <p className="text-sm text-gray-500 mt-1">{Object.keys(allData).length}건 출고 / {allRows.length}개 SKU</p>
       </header>
 
@@ -212,26 +212,6 @@ export default function DataPage() {
             XLSX.utils.book_append_sheet(wb, ws, '데이터');
             XLSX.writeFile(wb, `전체데이터_${new Date().toISOString().slice(0,10)}.xlsx`);
           }} className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium text-sm hover:bg-green-700 whitespace-nowrap">EXCEL 다운</button>
-        </div>
-        <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t border-gray-200">
-          <span className="text-sm font-bold text-gray-700">개별CBM 필터:</span>
-          {[
-            { key: 'all', label: '전체', color: '', activeBg: 'bg-blue-600 border-blue-600' },
-            { key: 'confirmed', label: 'CBM 확정', color: 'text-gray-900', activeBg: 'bg-gray-800 border-gray-800' },
-            { key: 'semi', label: 'CBM 준확정', color: 'text-amber-500', activeBg: 'bg-amber-500 border-amber-500' },
-            { key: 'estimated', label: 'CBM 추정', color: 'text-red-500', activeBg: 'bg-red-500 border-red-500' },
-          ].map(opt => (
-            <button key={opt.key} onClick={() => { setCbmFilter(opt.key); setDisplayCount(100); }}
-              className={`px-4 py-2 rounded-lg text-sm font-bold border-2 transition-colors ${
-                cbmFilter === opt.key
-                  ? opt.activeBg + ' text-white'
-                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-              }`}>
-              {opt.color && <span className={`${cbmFilter === opt.key ? 'text-white' : opt.color} mr-1`}>●</span>}
-              {opt.label}
-            </button>
-          ))}
-          {cbmFilter !== 'all' && <span className="text-sm font-bold text-blue-600 ml-2">{filtered.length}건</span>}
         </div>
       </div>
 

@@ -58,6 +58,7 @@ export default function ConfirmedCbmPage() {
   const [ccReasons, setCcReasons] = useState({});
   const [recommendedSkus, setRecommendedSkus] = useState(new Set());
   const [showRecommend, setShowRecommend] = useState(false);
+  const [recommendDesc, setRecommendDesc] = useState('');
 
   const toggleConfirmSku = useCallback(async (sku) => {
     if (confirmedSkus.has(sku)) return; // 한번 확인완료하면 해제 안 됨
@@ -76,24 +77,28 @@ export default function ConfirmedCbmPage() {
   const [excludedData, setExcludedData] = useState({});
   const excludedKeys = useMemo(() => new Set(Object.entries(excludedData).filter(([, v]) => v.excluded !== false).map(([k]) => k)), [excludedData]);
 
+  const [ccTodos, setCcTodos] = useState({});
+
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('costcheck_confirmed');
-      if (saved) setCcConfirmed(JSON.parse(saved));
-      const savedMemos = localStorage.getItem('costcheck_memos');
-      if (savedMemos) setCcMemos(JSON.parse(savedMemos));
-      const savedReasons = localStorage.getItem('costcheck_reasons');
-      if (savedReasons) setCcReasons(JSON.parse(savedReasons));
-    } catch {}
+    fetch('/api/costcheck-data').then(r => r.json()).then(data => {
+      if (data.confirmed) setCcConfirmed(data.confirmed);
+      if (data.memos) setCcMemos(data.memos);
+      if (data.reasons) setCcReasons(data.reasons);
+      if (data.todos) setCcTodos(data.todos);
+    }).catch(() => {});
+  }, []);
+
+  const saveCostcheck = useCallback((type, data) => {
+    fetch('/api/costcheck-data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, data }) }).catch(() => {});
   }, []);
 
   const updateCcMemo = useCallback((key, text) => {
     setCcMemos(prev => {
       const next = { ...prev, [key]: text };
-      localStorage.setItem('costcheck_memos', JSON.stringify(next));
+      saveCostcheck('memos', next);
       return next;
     });
-  }, []);
+  }, [saveCostcheck]);
 
   useEffect(() => {
     Promise.all([
@@ -484,6 +489,7 @@ export default function ConfirmedCbmPage() {
             if (candidates.length === 0) { alert('조건에 맞는 SKU가 없습니다.'); return; }
             setRecommendedSkus(new Set(candidates.map(r => r.sku)));
             setShowRecommend(true);
+            setRecommendDesc('출고 2회 이상 + 원가편차 300원 이하 + 미확인');
             setConfirmFilter('unconfirmed');
           }} className={`group relative px-5 py-2 text-white rounded-lg text-sm font-semibold ml-2 ${cbmFilter === 'semi' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-purple-600 hover:bg-purple-700'}`}>
             {cbmFilter === 'semi' ? '자동추천 3' : '자동추천 1'}
@@ -497,6 +503,7 @@ export default function ConfirmedCbmPage() {
             if (candidates.length === 0) { alert('조건에 맞는 SKU가 없습니다.'); return; }
             setRecommendedSkus(new Set(candidates.map(r => r.sku)));
             setShowRecommend(true);
+            setRecommendDesc('출고 1회 + 박스 2개 이상 + 동일입수량 + 미확인');
             setConfirmFilter('unconfirmed');
           }} className="group relative px-5 py-2 bg-orange-500 text-white rounded-lg text-sm font-semibold hover:bg-orange-600 ml-2">
             자동추천 2
@@ -506,6 +513,21 @@ export default function ConfirmedCbmPage() {
           </button>
           )}
           </>)}
+          {cbmFilter === 'estimated' && (
+          <button onClick={() => {
+            const candidates = filtered.filter(r => !confirmedSkus.has(r.sku) && r.shipCount >= 2 && r.costRange <= 300);
+            if (candidates.length === 0) { alert('조건에 맞는 SKU가 없습니다.'); return; }
+            setRecommendedSkus(new Set(candidates.map(r => r.sku)));
+            setShowRecommend(true);
+            setRecommendDesc('출고 2회 이상 + 원가편차 300원 이하 + 미확인');
+            setConfirmFilter('unconfirmed');
+          }} className="group relative px-5 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 ml-2">
+            자동추천 4
+            <span className="invisible group-hover:visible absolute left-1/2 -translate-x-1/2 top-full mt-1 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-black whitespace-nowrap shadow-lg z-50">
+              출고 2회 이상 + 원가편차 300원 이하
+            </span>
+          </button>
+          )}
           {cbmFilter !== 'all' && (
           <button onClick={() => setConfirmFilter(confirmFilter === 'unconfirmed' ? 'all' : 'unconfirmed')}
             className={`px-5 py-2 rounded-lg text-sm font-semibold ml-2 ${confirmFilter === 'unconfirmed' ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
@@ -521,7 +543,7 @@ export default function ConfirmedCbmPage() {
               { key: 'semi', label: '준확정', color: 'text-amber-500', activeBg: 'bg-amber-500 border-amber-500', desc: '출고건 중 절반 이상 CBM 있음, 나머지 없음' },
               { key: 'estimated', label: '추정', color: 'text-red-500', activeBg: 'bg-red-500 border-red-500', desc: 'CBM 없거나 절반 미만만 있음' },
             ].map(opt => (
-              <button key={opt.key} onClick={() => { setCbmFilter(opt.key); setDisplayCount(100); }}
+              <button key={opt.key} onClick={() => { setCbmFilter(opt.key); setDisplayCount(100); setShowRecommend(false); setRecommendedSkus(new Set()); }}
                 className={`group relative px-3 py-1.5 rounded-lg text-sm font-bold border-2 transition-colors ${
                   cbmFilter === opt.key
                     ? opt.activeBg + ' text-white'
@@ -539,7 +561,7 @@ export default function ConfirmedCbmPage() {
             <div className="mt-3 p-4 bg-yellow-50 border-2 border-yellow-300 rounded-xl">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <span className="text-sm font-bold text-yellow-800">추천 조건: 출고 1회 + 박스 2개 이상 + 동일입수량 + 미확인</span>
+                  <span className="text-sm font-bold text-yellow-800">추천 조건: {recommendDesc}</span>
                   <span className="text-sm font-bold text-purple-600 ml-3">{recommendedSkus.size}건 선택됨</span>
                 </div>
                 <div className="flex gap-2">
@@ -576,7 +598,9 @@ export default function ConfirmedCbmPage() {
                         <td className="px-2 py-2 whitespace-nowrap">출고 {r.shipCount}회</td>
                         <td className="px-2 py-2 whitespace-nowrap">편차 {formatNum(r.costRange)}원</td>
                         <td className="px-2 py-2 whitespace-nowrap font-bold">원가 {formatNum(r.costPerUnit)}원</td>
-                        <td className="px-2 py-2 whitespace-nowrap text-gray-600">/ 총수량 {formatNum(r.shippedQty)} 박스수 {r.totalBoxCount || (r.subRows ? r.subRows.length : 1)} 입수량 {r.qtyPerBox || '-'}</td>
+                        <td className="px-2 py-2 whitespace-nowrap text-gray-600">/ 총수량 {formatNum(r.shippedQty)}</td>
+                        <td className="px-2 py-2 whitespace-nowrap text-gray-600">박스수 {r.totalBoxCount || (r.subRows ? r.subRows.length : 1)}</td>
+                        <td className="px-2 py-2 whitespace-nowrap text-gray-600">입수량 {r.qtyPerBox || (r.totalBoxCount ? Math.round(r.shippedQty / r.totalBoxCount) : '-')}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -774,7 +798,7 @@ export default function ConfirmedCbmPage() {
                                             <button onClick={() => {
                                               if (costInputVal) {
                                                 updateCcMemo(cKey, costInputVal);
-                                                setCcConfirmed(prev => { const next = {...prev, [cKey]: true}; localStorage.setItem('costcheck_confirmed', JSON.stringify(next)); return next; });
+                                                setCcConfirmed(prev => { const next = {...prev, [cKey]: true}; saveCostcheck('confirmed', next); return next; });
                                                 setCostInputSku(null);
                                               }
                                             }} className="px-2 py-1 bg-green-500 text-white rounded text-xs font-bold hover:bg-green-600">확정</button>
@@ -783,7 +807,7 @@ export default function ConfirmedCbmPage() {
                                         ) : (
                                           <button onClick={() => {
                                             if (isConfirmed) {
-                                              setCcConfirmed(prev => { const next = {...prev}; delete next[cKey]; localStorage.setItem('costcheck_confirmed', JSON.stringify(next)); return next; });
+                                              setCcConfirmed(prev => { const next = {...prev}; delete next[cKey]; saveCostcheck('confirmed', next); return next; });
                                               updateCcMemo(cKey, '');
                                             } else {
                                               setCostInputSku(cKey);
@@ -794,13 +818,13 @@ export default function ConfirmedCbmPage() {
                                           </button>
                                         )}
                                         <textarea placeholder="메모" rows={1} value={ccReasons[cKey] || ''}
-                                          onChange={e => { setCcReasons(prev => { const next = {...prev, [cKey]: e.target.value}; localStorage.setItem('costcheck_reasons', JSON.stringify(next)); return next; }); }}
+                                          onChange={e => { setCcReasons(prev => { const next = {...prev, [cKey]: e.target.value}; saveCostcheck('reasons', next); return next; }); }}
                                           onFocus={e => { e.target.rows = 5; e.target.style.width = '200px'; }}
                                           onBlur={e => { e.target.rows = 1; e.target.style.width = '100px'; }}
                                           className="w-[100px] px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-blue-400 resize-none transition-all" />
                                         <textarea placeholder="해야할일" rows={1}
-                                          value={(() => { try { return JSON.parse(localStorage.getItem('costcheck_todos') || '{}')[cKey] || ''; } catch { return ''; } })()}
-                                          onChange={e => { const todos = JSON.parse(localStorage.getItem('costcheck_todos') || '{}'); todos[cKey] = e.target.value; localStorage.setItem('costcheck_todos', JSON.stringify(todos)); setCcConfirmed(p => ({...p})); }}
+                                          value={ccTodos[cKey] || ''}
+                                          onChange={e => { setCcTodos(prev => { const next = {...prev, [cKey]: e.target.value}; saveCostcheck('todos', next); return next; }); }}
                                           onFocus={e => { e.target.rows = 5; e.target.style.width = '200px'; }}
                                           onBlur={e => { e.target.rows = 1; e.target.style.width = '100px'; }}
                                           className="w-[100px] px-2 py-1 text-xs border border-orange-200 rounded focus:outline-none focus:border-orange-400 resize-none transition-all" />

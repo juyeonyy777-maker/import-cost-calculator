@@ -247,8 +247,8 @@ export default function Home() {
     rows = [...rows].sort((a, b) => {
       let va, vb;
       if (sortKey === 'ratio') {
-        va = a.unitPriceCny > 0 ? a.costPerUnit / a.unitPriceCny : 0;
-        vb = b.unitPriceCny > 0 ? b.costPerUnit / b.unitPriceCny : 0;
+        va = a.unitPriceRaw > 0 ? a.costPerUnit / a.unitPriceRaw : 0;
+        vb = b.unitPriceRaw > 0 ? b.costPerUnit / b.unitPriceRaw : 0;
       } else if (sortKey === 'costX285') {
         va = Math.round(a.unitPriceRaw * 285);
         vb = Math.round(b.unitPriceRaw * 285);
@@ -304,21 +304,9 @@ export default function Home() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             확정CBM 원가
           </button>
-          <button onClick={() => window.open('/confirmed', '_blank')} className="w-full text-left text-gray-400 hover:text-white hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            확정 원가
-          </button>
-          <button onClick={() => window.open('/data', '_blank')} className="w-full text-left text-gray-400 hover:text-white hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
+<button onClick={() => window.open('/data', '_blank')} className="w-full text-left text-gray-400 hover:text-white hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" /></svg>
-            전체 데이터 조회
-          </button>
-          <button onClick={() => window.open('/cbm-needed', '_blank')} className="w-full text-left text-gray-400 hover:text-white hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-            CBM 입력필요
-          </button>
-          <button onClick={() => window.open('/cost-check', '_blank')} className="w-full text-left text-gray-400 hover:text-white hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
-            원가 이상치
+            원가 계산 원본
           </button>
           <button onClick={() => window.open('/todo', '_blank')} className="w-full text-left text-gray-400 hover:text-white hover:bg-[#253347] rounded-lg px-3 py-2.5 text-sm flex items-center gap-2.5 transition-colors">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
@@ -455,14 +443,13 @@ export default function Home() {
                     <p className="text-sm font-semibold text-blue-600 mb-1">총 수입원가</p>
                     <p className="text-2xl font-bold text-[#1a2332]">{fmt(
                       result.results.reduce((s, r) => s + r.productCostKrw * r.shippedQty, 0)
-                      + Math.round((0.7 * result.summary.totalQty + result.results.reduce((s, r) => s + (r.commission || 0) * r.shippedQty, 0)) * (result.summary.exchangeRateCNY || 195))
                       + (parsedInfo?.invoice?.totalAmount || 0)
                     )}<span className="text-sm ml-0.5 text-gray-500">원</span></p>
                   </div>
                   <div className="bg-[#f5f6fa] rounded-lg p-4 border border-gray-100">
                     <p className="text-sm font-semibold text-pink-600 mb-1">1. 총 제품비(CNY)</p>
-                    <p className="text-xl font-bold text-[#1a2332]">{Math.round(((parsedInfo?.excel?.totals?.totalAmount || 0) + (parsedInfo?.excel?.totals?.totalShipping || 0)) * 100) / 100} <span className="text-sm text-gray-500">CNY</span></p>
-                    <p className="text-base font-semibold text-gray-600">= {fmt(result.results.reduce((s, r) => s + r.productCostKrw * r.shippedQty, 0))}원</p>
+                    <p className="text-xl font-bold text-[#1a2332]">{Math.round(result.results.reduce((s, r) => s + r.unitPriceCny * r.shippedQty, 0) * 100) / 100} <span className="text-sm text-gray-500">CNY</span></p>
+                    <p className="text-base font-semibold text-gray-600">= {fmt(Math.round(result.results.reduce((s, r) => s + r.unitPriceCny * r.exchangeRate * r.shippedQty, 0)))}원</p>
                   </div>
                   <div className="bg-[#f5f6fa] rounded-lg p-4 border border-gray-100">
                     <p className="text-sm font-semibold text-purple-600 mb-1">2. 총 수수료(CNY)</p>
@@ -509,7 +496,7 @@ export default function Home() {
                 <div className="px-5 py-2.5 border-t border-b border-gray-200 flex items-center gap-2">
                   <button onClick={handleDownloadSku} className="px-3 py-1.5 bg-[#3b82f6] text-white rounded-md text-xs font-semibold hover:bg-[#2563eb] transition-colors">전체 EXCEL 다운</button>
                   <button onClick={() => window.open('/logic', '_blank')} className="px-3 py-1.5 bg-white text-gray-600 border border-gray-300 rounded-md text-xs font-semibold hover:bg-gray-50 transition-colors">컬럼 로직</button>
-                  <button onClick={() => window.open('/data', '_blank')} className="px-3 py-1.5 bg-white text-gray-600 border border-gray-300 rounded-md text-xs font-semibold hover:bg-gray-50 transition-colors">전체 데이터 조회</button>
+                  <button onClick={() => window.open('/data', '_blank')} className="px-3 py-1.5 bg-white text-gray-600 border border-gray-300 rounded-md text-xs font-semibold hover:bg-gray-50 transition-colors">원가 계산 원본</button>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="text-sm" style={{ tableLayout: 'fixed', minWidth: '100%' }}>
@@ -520,14 +507,13 @@ export default function Home() {
                         <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="60px" onClick={() => handleSort('cbmPerUnit')}>CBM{sortIcon('cbmPerUnit')}</RTh>
                         <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="180px" onClick={() => handleSort('productName')}>상품명{sortIcon('productName')}</RTh>
                         <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="45px" onClick={() => handleSort('shippedQty')}>수량{sortIcon('shippedQty')}</RTh>
-                        <RTh className={`${thBase} bg-pink-50/70 cursor-pointer hover:text-blue-600`} initialWidth="70px" onClick={() => handleSort('unitPriceCny')}>단가{sortIcon('unitPriceCny')}</RTh>
+                        <RTh className={`${thBase} bg-pink-50/70 cursor-pointer hover:text-blue-600`} initialWidth="70px" onClick={() => handleSort('unitPriceRaw')}>순수단가{sortIcon('unitPriceRaw')}</RTh>
+                        <RTh className={`${thBase} bg-pink-50/70`} initialWidth="60px">운임단가</RTh>
                         <RTh className={`${thBase} bg-pink-50/70`} initialWidth="50px">후불</RTh>
                         <RTh className={`${thBase} bg-pink-50/70 cursor-pointer hover:text-blue-600`} initialWidth="55px" onClick={() => handleSort('commission')}>수수료{sortIcon('commission')}</RTh>
                         <RTh className={`${thBase} bg-amber-50/70 cursor-pointer hover:text-blue-600`} initialWidth="80px" onClick={() => handleSort('costPerUnit')}>원가(개당){sortIcon('costPerUnit')}</RTh>
                         <RTh className={`${thBase} bg-purple-50/70 cursor-pointer hover:text-blue-600`} initialWidth="75px" onClick={() => handleSort('avgCost')}>평균원가{sortIcon('avgCost')}</RTh>
                         <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="60px" onClick={() => handleSort('ratio')}>배수{sortIcon('ratio')}</RTh>
-                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="75px" onClick={() => handleSort('costX285')}>x285{sortIcon('costX285')}</RTh>
-                        <RTh className={`${thBase} cursor-pointer hover:text-blue-600`} initialWidth="65px" onClick={() => handleSort('costDiff')}>차이{sortIcon('costDiff')}</RTh>
                         {COST_COLS.map(c => <RTh key={c.key} className={`${thBase} bg-sky-50/70 cursor-pointer hover:text-blue-600`} initialWidth="75px" onClick={() => handleSort('cost_' + c.key)}>{c.label}{sortIcon('cost_' + c.key)}</RTh>)}
                       </tr>
                     </thead>
@@ -536,12 +522,8 @@ export default function Home() {
                       <tr className="border-b border-gray-200 font-semibold bg-emerald-50/50 text-xs">
                         <td className="px-3 py-2 sticky left-0 bg-emerald-50/50 z-10 font-bold">실제 비용</td>
                         <td className="px-3 py-2"></td><td className="px-3 py-2"></td><td className="px-3 py-2"></td><td className="px-3 py-2"></td>
-                        <td className="px-3 py-2"></td><td className="px-3 py-2"></td><td className="px-3 py-2"></td>
+                        <td className="px-3 py-2"></td><td className="px-3 py-2"></td><td className="px-3 py-2"></td><td className="px-3 py-2"></td>
                         <td className="px-3 py-2"></td><td className="px-3 py-2"></td>
-                        <td className="px-3 py-2 text-right text-red-500 font-bold whitespace-nowrap">
-                          평균 {(() => { const r = rows.filter(r => r.unitPriceCny > 0).map(r => r.costPerUnit / r.unitPriceCny); return r.length > 0 ? Math.round(r.reduce((a, b) => a + b, 0) / r.length * 100) / 100 : '-'; })()}
-                        </td>
-                        <td className="px-3 py-2"></td>
                         <td className="px-3 py-2"></td>
                         {COST_COLS.map(col => {
                           const c = parsedInfo?.invoice?.costs?.[col.key];
@@ -556,13 +538,11 @@ export default function Home() {
                         <td className="px-3 py-2 text-right">{Math.round(rows.reduce((s, r) => s + (r.cbmPerUnit || 0) * r.shippedQty, 0) * 10000) / 10000}</td>
                         <td className="px-3 py-2"></td>
                         <td className="px-3 py-2 text-right">{fmt(rows.reduce((s, r) => s + r.shippedQty, 0))}</td>
-                        <td className="px-3 py-2 text-right">{Math.round(rows.reduce((s, r) => s + r.unitPriceCny * r.shippedQty, 0) * 100) / 100}</td>
+                        <td className="px-3 py-2 text-right">{Math.round(rows.reduce((s, r) => s + r.unitPriceRaw * r.shippedQty, 0) * 100) / 100}</td>
+                        <td className="px-3 py-2 text-right">{Math.round(rows.reduce((s, r) => s + (r.chinaShippingPerUnit || 0) * r.shippedQty, 0) * 100) / 100}</td>
                         <td className="px-3 py-2 text-right">{Math.round(rows.reduce((s, r) => s + 0.7 * r.shippedQty, 0) * 100) / 100}</td>
                         <td className="px-3 py-2 text-right">{Math.round(rows.reduce((s, r) => s + (r.commission || 0) * r.shippedQty, 0) * 100) / 100}</td>
                         <td className="px-3 py-2 text-right">{fmt(rows.reduce((s, r) => s + r.costPerUnit * r.shippedQty, 0))}원</td>
-                        <td className="px-3 py-2"></td><td className="px-3 py-2"></td>
-                        <td className="px-3 py-2 text-right">{fmt(rows.reduce((s, r) => s + Math.round(r.unitPriceRaw * 285) * r.shippedQty, 0))}원</td>
-                        <td className="px-3 py-2"></td>
                         {COST_COLS.map(col => {
                           const c = parsedInfo?.invoice?.costs?.[col.key];
                           const actual = c ? (c.amount || 0) + (c.vatAmount || 0) : 0;
@@ -576,7 +556,7 @@ export default function Home() {
                         const yv = yuanMap[r.sku];
                         const yd = yv != null ? Math.abs(r.unitPriceCny - yv) : 0;
                         const yw = yv != null && yd >= 4;
-                        const ratio = r.unitPriceCny > 0 ? Math.round(r.costPerUnit / r.unitPriceCny * 100) / 100 : '-';
+                        const ratio = r.unitPriceRaw > 0 ? Math.round(r.costPerUnit / r.unitPriceRaw * 100) / 100 : '-';
                         const bg = i % 2 === 0 ? 'bg-white' : 'bg-[#f9fafb]';
                         return (
                           <tr key={r.sku} className={`${bg} hover:bg-blue-50/30 transition-colors`}>
@@ -586,18 +566,15 @@ export default function Home() {
                             <td className="px-3 py-2" style={{ wordBreak: 'break-word' }}>{r.labelName || r.productName}</td>
                             <td className="px-3 py-2 text-right font-semibold">{r.shippedQty}</td>
                             <td className={`px-3 py-2 text-right font-semibold ${yw ? 'text-red-500 bg-red-50' : ''}`}
-                              title={yv != null ? `위안화 정보: ${yv} (차이: ${(r.unitPriceCny - yv).toFixed(2)})` : ''}>
-                              {r.unitPriceCny}{yw && <span className="text-xs ml-1">({yv})</span>}
+                              title={yv != null ? `위안화 정보: ${yv} (차이: ${(r.unitPriceRaw - yv).toFixed(2)})` : ''}>
+                              {r.unitPriceRaw}{yw && <span className="text-xs ml-1">({yv})</span>}
                             </td>
+                            <td className="px-3 py-2 text-right text-gray-500">{r.chinaShippingPerUnit || 0}</td>
                             <td className="px-3 py-2 text-right">0.7</td>
                             <td className="px-3 py-2 text-right">{r.commission || ''}</td>
                             <td className="px-3 py-2 text-right font-semibold text-blue-700 bg-amber-50/50">{fmt(r.costPerUnit)}원</td>
                             <td className="px-3 py-2 text-right font-semibold text-purple-700 bg-purple-50/30">{skuAvgCost[r.sku] ? fmt(skuAvgCost[r.sku]) + '원' : '-'}</td>
                             <td className="px-3 py-2 text-right font-semibold text-[#1a2332]">{ratio}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-[#1a2332]">{fmt(Math.round(r.unitPriceRaw * 285))}원</td>
-                            {(() => { const d = Math.round(r.unitPriceRaw * 285) - (r.costPerUnit || 0); return (
-                              <td className={`px-3 py-2 text-right font-semibold ${d >= 0 ? 'text-blue-600' : 'text-red-500'}`}>{d >= 0 ? '+' : ''}{fmt(d)}원</td>
-                            ); })()}
                             {COST_COLS.map(col => <td key={col.key} className="px-3 py-2 text-right">{fmt(r.costs?.[col.key]?.perUnit)}원</td>)}
                           </tr>
                         );
