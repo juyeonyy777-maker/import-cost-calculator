@@ -15,16 +15,14 @@ export default function CostSimulator() {
   // 상세 설정
   const [showDetail, setShowDetail] = useState(false);
   const [exchangeRate, setExchangeRate] = useState('210');
-  const [postpaidFee, setPostpaidFee] = useState('0.7');       // 후불수수료 CNY
-  const [commission, setCommission] = useState('0');            // 구매수수료 CNY
-  const [oceanFreightPerCbm, setOceanFreightPerCbm] = useState('98000'); // 해상운임 원/CBM
-  const [domesticPerCbm, setDomesticPerCbm] = useState('50000');          // 내륙운송 원/CBM
-  const [purchasingFeeRate, setPurchasingFeeRate] = useState('1');         // 수수료1% (한화제품가 대비 %)
-  const [docFeeTotal, setDocFeeTotal] = useState('27500');                 // DOC 건당
-  const [originCertTotal, setOriginCertTotal] = useState('35000');         // 원산지 건당
-  const [clearanceFeeTotal, setClearanceFeeTotal] = useState('33000');     // 통관 건당
-  const [shipmentQty, setShipmentQty] = useState('4000');                  // 출고수량 (건당 총수량)
-  const [dutyRate, setDutyRate] = useState('0');           // 관세율 %
+  const [postpaidFee, setPostpaidFee] = useState('0.7');                   // SOP 비용 CNY
+  const [commissionRate, setCommissionRate] = useState('7');               // 수수료 % (순수단가 기준)
+  const [oceanFreightPerCbm, setOceanFreightPerCbm] = useState('96000');  // 해상운임 원/CBM
+  const [domesticPerCbm, setDomesticPerCbm] = useState('15000');          // 내륙운송 원/CBM
+  const [docFeePerUnit, setDocFeePerUnit] = useState('55');               // DOC 개당
+  const [originCertPerUnit, setOriginCertPerUnit] = useState('70');       // 원산지 개당
+  const [clearanceFeePerUnit, setClearanceFeePerUnit] = useState('66');   // 통관 개당
+  const [dutyRate, setDutyRate] = useState('4');           // 관세율 %
   const [vatRate, setVatRate] = useState('10');             // 부가세율 %
 
   const calc = useMemo(() => {
@@ -34,16 +32,14 @@ export default function CostSimulator() {
     const h = parseFloat(height) || 0;
     const d = parseFloat(depth) || 0;
     const q = parseInt(qty) || 1;
-    const rate = parseFloat(exchangeRate) || 195;
+    const rate = parseFloat(exchangeRate) || 210;
     const ppFee = parseFloat(postpaidFee) || 0;
-    const comm = parseFloat(commission) || 0;
+    const commRate = (parseFloat(commissionRate) || 0) / 100;
     const ofCbm = parseFloat(oceanFreightPerCbm) || 0;
     const dmCbm = parseFloat(domesticPerCbm) || 0;
-    const pfRate = (parseFloat(purchasingFeeRate) || 0) / 100;
-    const docTotal = parseFloat(docFeeTotal) || 0;
-    const originTotal = parseFloat(originCertTotal) || 0;
-    const clearTotal = parseFloat(clearanceFeeTotal) || 0;
-    const sQty = parseInt(shipmentQty) || 1;
+    const docPerUnit = parseFloat(docFeePerUnit) || 0;
+    const originPerUnit = parseFloat(originCertPerUnit) || 0;
+    const clearPerUnit = parseFloat(clearanceFeePerUnit) || 0;
     const dRate = (parseFloat(dutyRate) || 0) / 100;
     const vRate = (parseFloat(vatRate) || 0) / 100;
 
@@ -52,21 +48,21 @@ export default function CostSimulator() {
     // CBM 계산
     const cbmPerUnit = (w * h * d) / 1000000;
 
-    // 원화 제품가 (순수단가 + 운임단가 + 후불수수료 + 수수료) × 환율
-    const totalCny = up + fp + ppFee + comm;
+    // 원화 제품가 (순수단가 + 운임단가 + SOP비용) × 환율
+    const totalCny = up + fp + ppFee;
     const productCostKrw = totalCny * rate;
 
-    // 수수료1% (한화제품가 기준)
-    const purchasingUnit = productCostKrw * pfRate;
+    // 수수료 7% (순수단가 기준)
+    const commissionUnit = up * commRate * rate;
 
     // CBM 기반 비용
     const oceanFreightUnit = cbmPerUnit * ofCbm;
     const domesticUnit = cbmPerUnit * dmCbm;
 
-    // 건당 고정비 ÷ 출고수량
-    const docUnit = docTotal / sQty;
-    const originCertUnit = originTotal / sQty;
-    const clearanceUnit = clearTotal / sQty;
+    // 개당 고정비
+    const docUnit = docPerUnit;
+    const originCertUnit = originPerUnit;
+    const clearanceUnit = clearPerUnit;
 
     // 과세가격 (관세 기준): 한화제품가 + 해상운임
     const taxablePrice = productCostKrw + oceanFreightUnit;
@@ -77,7 +73,7 @@ export default function CostSimulator() {
     const vatUnit = vatBase * vRate;
 
     // 총 수입원가 (개당)
-    const costPerUnit = productCostKrw + purchasingUnit + oceanFreightUnit + docUnit
+    const costPerUnit = productCostKrw + commissionUnit + oceanFreightUnit + docUnit
       + originCertUnit + clearanceUnit + dutyUnit + vatUnit + domesticUnit;
 
     const totalCost = costPerUnit * q;
@@ -86,7 +82,7 @@ export default function CostSimulator() {
       cbmPerUnit,
       totalCny,
       productCostKrw,
-      purchasingUnit,
+      commissionUnit,
       oceanFreightUnit,
       docUnit,
       originCertUnit,
@@ -98,7 +94,7 @@ export default function CostSimulator() {
       totalCost,
       q,
     };
-  }, [unitPrice, freightPrice, width, height, depth, qty, exchangeRate, postpaidFee, commission, oceanFreightPerCbm, domesticPerCbm, purchasingFeeRate, docFeeTotal, originCertTotal, clearanceFeeTotal, shipmentQty, dutyRate, vatRate]);
+  }, [unitPrice, freightPrice, width, height, depth, qty, exchangeRate, postpaidFee, commissionRate, oceanFreightPerCbm, domesticPerCbm, docFeePerUnit, originCertPerUnit, clearanceFeePerUnit, dutyRate, vatRate]);
 
   const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors';
   const labelCls = 'block text-xs font-semibold text-gray-600 mb-1.5';
@@ -220,40 +216,28 @@ export default function CostSimulator() {
                     <input type="number" step="0.1" value={exchangeRate} onChange={e => setExchangeRate(e.target.value)} className={inputCls} />
                   </div>
                   <div>
-                    <label className={labelCls}>후불수수료 (CNY/개)</label>
+                    <label className={labelCls}>SOP 비용 (CNY/개)</label>
                     <input type="number" step="0.1" value={postpaidFee} onChange={e => setPostpaidFee(e.target.value)} className={inputCls} />
                   </div>
                   <div>
-                    <label className={labelCls}>구매수수료 (CNY/개)</label>
-                    <input type="number" step="0.1" value={commission} onChange={e => setCommission(e.target.value)} className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>수수료 (%)</label>
-                    <input type="number" step="0.1" value={purchasingFeeRate} onChange={e => setPurchasingFeeRate(e.target.value)} className={inputCls} />
+                    <label className={labelCls}>수수료 (%, 순수단가 기준)</label>
+                    <input type="number" step="0.1" value={commissionRate} onChange={e => setCommissionRate(e.target.value)} className={inputCls} />
                   </div>
                   <div>
                     <label className={labelCls}>해상운임 (원/CBM)</label>
                     <input type="number" step="1000" value={oceanFreightPerCbm} onChange={e => setOceanFreightPerCbm(e.target.value)} className={inputCls} />
                   </div>
                   <div>
-                    <label className={labelCls}>내륙운송 (원/CBM)</label>
-                    <input type="number" step="1000" value={domesticPerCbm} onChange={e => setDomesticPerCbm(e.target.value)} className={inputCls} />
+                    <label className={labelCls}>DOC 개당 (원)</label>
+                    <input type="number" step="1" value={docFeePerUnit} onChange={e => setDocFeePerUnit(e.target.value)} className={inputCls} />
                   </div>
                   <div>
-                    <label className={labelCls}>DOC 건당 (원)</label>
-                    <input type="number" step="500" value={docFeeTotal} onChange={e => setDocFeeTotal(e.target.value)} className={inputCls} />
+                    <label className={labelCls}>원산지 개당 (원)</label>
+                    <input type="number" step="1" value={originCertPerUnit} onChange={e => setOriginCertPerUnit(e.target.value)} className={inputCls} />
                   </div>
                   <div>
-                    <label className={labelCls}>원산지 건당 (원)</label>
-                    <input type="number" step="500" value={originCertTotal} onChange={e => setOriginCertTotal(e.target.value)} className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>통관 건당 (원)</label>
-                    <input type="number" step="500" value={clearanceFeeTotal} onChange={e => setClearanceFeeTotal(e.target.value)} className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>출고수량 (건당 총수량)</label>
-                    <input type="number" step="100" value={shipmentQty} onChange={e => setShipmentQty(e.target.value)} className={inputCls} />
+                    <label className={labelCls}>통관 개당 (원)</label>
+                    <input type="number" step="1" value={clearanceFeePerUnit} onChange={e => setClearanceFeePerUnit(e.target.value)} className={inputCls} />
                   </div>
                   <div>
                     <label className={labelCls}>관세율 (%)</label>
@@ -262,6 +246,10 @@ export default function CostSimulator() {
                   <div>
                     <label className={labelCls}>부가세율 (%)</label>
                     <input type="number" step="0.1" value={vatRate} onChange={e => setVatRate(e.target.value)} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>내륙운송 (원/CBM)</label>
+                    <input type="number" step="1000" value={domesticPerCbm} onChange={e => setDomesticPerCbm(e.target.value)} className={inputCls} />
                   </div>
                 </div>
               </div>
@@ -325,11 +313,11 @@ export default function CostSimulator() {
                     <tbody>
                       {[
                         ['제품가 (CNY→KRW)', calc.productCostKrw, `${fmt(calc.totalCny)}CNY × ${exchangeRate}원`],
-                        ['수수료1%', calc.purchasingUnit, `제품가 × ${purchasingFeeRate}%`],
+                        ['수수료 7%', calc.commissionUnit, `순수단가 × ${commissionRate}% × ${exchangeRate}원`],
                         ['해상운임', calc.oceanFreightUnit, `${calc.cbmPerUnit.toFixed(4)}CBM × ${fmt(parseFloat(oceanFreightPerCbm))}원`],
-                        ['DOC', calc.docUnit, `${fmt(parseFloat(docFeeTotal))}원 ÷ ${shipmentQty}개`],
-                        ['원산지', calc.originCertUnit, `${fmt(parseFloat(originCertTotal))}원 ÷ ${shipmentQty}개`],
-                        ['통관', calc.clearanceUnit, `${fmt(parseFloat(clearanceFeeTotal))}원 ÷ ${shipmentQty}개`],
+                        ['DOC', calc.docUnit, `개당 ${fmt(parseFloat(docFeePerUnit))}원`],
+                        ['원산지', calc.originCertUnit, `개당 ${fmt(parseFloat(originCertPerUnit))}원`],
+                        ['통관', calc.clearanceUnit, `개당 ${fmt(parseFloat(clearanceFeePerUnit))}원`],
                         ['관세', calc.dutyUnit, dutyRate > 0 ? `과세가격 × ${dutyRate}%` : '관세율 0%'],
                         ['부가세', calc.vatUnit, `(제품가+해상운임+관세) × ${vatRate}%`],
                         ['내륙운송', calc.domesticUnit, `${calc.cbmPerUnit.toFixed(4)}CBM × ${fmt(parseFloat(domesticPerCbm))}원`],

@@ -205,7 +205,7 @@ export default function Home() {
   /* ═══════════════ 이름 입력 화면 ═══════════════ */
   if (!nameOk) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f5f6fa]">
+      <div className="min-h-screen flex items-center justify-center bg-[#f5f6fa] -mt-20">
         <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-10 w-full max-w-sm text-center">
           <div className="w-14 h-14 bg-[#1a2332] rounded-xl flex items-center justify-center mx-auto mb-5">
             <span className="text-white text-lg font-bold tracking-tight">IC</span>
