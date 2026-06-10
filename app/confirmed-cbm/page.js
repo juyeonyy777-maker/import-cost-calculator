@@ -45,7 +45,7 @@ export default function ConfirmedCbmPage() {
   const [expandedSku, setExpandedSku] = useState(null);
   const [cbmFilter, setCbmFilter] = useState('all');
   const [confirmFilter, setConfirmFilter] = useState('all'); // 'all' | 'confirmed' | 'unconfirmed'
-  const [confirmedSkus, setConfirmedSkus] = useState(new Set());
+  const [confirmedSkus, setConfirmedSkus] = useState({}); // { sku: { confirmedAt } }
   const [compareSort, setCompareSort] = useState(null);
   const [shipDateSort, setShipDateSort] = useState(null);
   const [shipCostSort, setShipCostSort] = useState(null);
@@ -61,13 +61,12 @@ export default function ConfirmedCbmPage() {
   const [recommendDesc, setRecommendDesc] = useState('');
 
   const toggleConfirmSku = useCallback(async (sku) => {
-    if (confirmedSkus.has(sku)) return; // 한번 확인완료하면 해제 안 됨
     const res = await fetch('/api/confirmed-skus', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'confirm', sku }),
     });
-    if (res.ok) setConfirmedSkus(prev => new Set([...prev, sku]));
-  }, [confirmedSkus]);
+    if (res.ok) setConfirmedSkus(prev => ({ ...prev, [sku]: { confirmedAt: new Date().toISOString() } }));
+  }, []);
 
   const toggleExpand = useCallback((sku) => {
     setExpandedSku(prev => prev === sku ? null : sku);
@@ -108,7 +107,7 @@ export default function ConfirmedCbmPage() {
     ]).then(([d, ex, cs]) => {
       setAllData(d);
       setExcludedData(typeof ex === 'object' && !Array.isArray(ex) ? ex : {});
-      setConfirmedSkus(new Set(Array.isArray(cs) ? cs : []));
+      setConfirmedSkus(Array.isArray(cs) ? {} : (cs || {}));
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -270,6 +269,27 @@ export default function ConfirmedCbmPage() {
     return rows;
   }, [allData, excludedKeys]);
 
+  // 재확인 필요: 가장 마지막에 넣은 파일에 포함된 확정 SKU만
+  const needsRecheckSkus = useMemo(() => {
+    const set = new Set();
+    // 가장 최근 savedAt인 출고파일 찾기
+    let latestKey = null, latestSavedAt = '';
+    for (const [key, entry] of Object.entries(allData)) {
+      if (entry.savedAt && entry.savedAt > latestSavedAt) {
+        latestSavedAt = entry.savedAt;
+        latestKey = key;
+      }
+    }
+    if (!latestKey || !allData[latestKey]?.rows) return set;
+    // 마지막 파일에 포함된 SKU 목록
+    const latestSkus = new Set(allData[latestKey].rows.map(r => r.sku).filter(Boolean));
+    // 그 중 이미 확정된 SKU만 재확인
+    for (const sku of latestSkus) {
+      if (confirmedSkus[sku]) set.add(sku);
+    }
+    return set;
+  }, [allRows, confirmedSkus, allData]);
+
   const skuGroups = useMemo(() => {
     const groups = {};
     for (const row of allRows) {
@@ -313,9 +333,11 @@ export default function ConfirmedCbmPage() {
 
     // 확인완료 필터
     if (confirmFilter === 'confirmed') {
-      result = result.filter(r => confirmedSkus.has(r.sku));
+      result = result.filter(r => confirmedSkus[r.sku] && !needsRecheckSkus.has(r.sku));
     } else if (confirmFilter === 'unconfirmed') {
-      result = result.filter(r => !confirmedSkus.has(r.sku));
+      result = result.filter(r => !confirmedSkus[r.sku]);
+    } else if (confirmFilter === 'recheck') {
+      result = result.filter(r => needsRecheckSkus.has(r.sku));
     }
 
     if (sortKey && sortDir) {
@@ -337,7 +359,7 @@ export default function ConfirmedCbmPage() {
     }
 
     return result;
-  }, [allRows, debouncedSearch, searched, sortKey, sortDir, cbmFilter, confirmFilter, confirmedSkus, skuGroups]);
+  }, [allRows, debouncedSearch, searched, sortKey, sortDir, cbmFilter, confirmFilter, confirmedSkus, needsRecheckSkus, skuGroups]);
 
   // 검색 적용 후 기준 데이터 (CBM 필터, 확인완료 필터 적용 전)
   const searchedRows = useMemo(() => {
@@ -397,9 +419,11 @@ export default function ConfirmedCbmPage() {
       });
     }
     const allCount = cbmFiltered.length;
-    const confirmedCount = cbmFiltered.filter(r => confirmedSkus.has(r.sku)).length;
-    return { all: allCount, confirmed: confirmedCount, unconfirmed: allCount - confirmedCount };
-  }, [searchedRows, cbmFilter, confirmedSkus]);
+    const recheckCount = cbmFiltered.filter(r => needsRecheckSkus.has(r.sku)).length;
+    const confirmedCount = cbmFiltered.filter(r => confirmedSkus[r.sku] && !needsRecheckSkus.has(r.sku)).length;
+    const unconfirmedCount = cbmFiltered.filter(r => !confirmedSkus[r.sku]).length;
+    return { all: allCount, confirmed: confirmedCount, unconfirmed: unconfirmedCount, recheck: recheckCount };
+  }, [searchedRows, cbmFilter, confirmedSkus, needsRecheckSkus]);
 
   const handleSort = (key) => {
     if (sortKey === key) {
@@ -410,7 +434,14 @@ export default function ConfirmedCbmPage() {
   const sortIcon = (key) => sortKey !== key ? ' ⇅' : sortDir === 'asc' ? ' ▲' : sortDir === 'desc' ? ' ▼' : ' ⇅';
   const th = (bg) => `px-3 py-2 font-bold text-gray-800 whitespace-nowrap cursor-pointer select-none hover:text-blue-600 text-center ${bg}`;
 
+  const fmtDate = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return `${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`;
+  };
+
   const columns = [
+    { key: 'confirmedDate', label: '확정일', width: '60px' },
     { key: 'sku', label: 'SKU', bg: 'sticky left-0 bg-gray-50 z-10', width: '150px' },
     { key: 'productName', label: '상품명', width: '200px' },
     { key: 'cbmPerUnit', label: '개별CBM', width: '80px' },
@@ -445,6 +476,7 @@ export default function ConfirmedCbmPage() {
           {[
             { key: 'all', label: '전체', activeBg: 'bg-blue-600 border-blue-600' },
             { key: 'confirmed', label: '확인완료', activeBg: 'bg-green-600 border-green-600' },
+            { key: 'recheck', label: '재확인 필요', activeBg: 'bg-orange-500 border-orange-500' },
             { key: 'unconfirmed', label: '미확인', activeBg: 'bg-gray-600 border-gray-600' },
           ].map(opt => (
             <button key={opt.key} onClick={() => { setConfirmFilter(opt.key); setDisplayCount(100); }}
@@ -454,7 +486,8 @@ export default function ConfirmedCbmPage() {
                   : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
               }`}>
               {opt.key === 'confirmed' && <span className={`${confirmFilter === opt.key ? 'text-white' : 'text-green-600'} mr-1`}>✓</span>}
-              {opt.label}
+              {opt.key === 'recheck' && <span className={`${confirmFilter === opt.key ? 'text-white' : 'text-orange-500'} mr-1`}>!</span>}
+              {opt.label}{opt.key === 'recheck' && confirmCounts.recheck > 0 ? ` (${confirmCounts.recheck})` : ''}
             </button>
           ))}
           <span className="text-sm font-bold text-blue-600 ml-2">{confirmCounts[confirmFilter]}건</span>
@@ -468,9 +501,11 @@ export default function ConfirmedCbmPage() {
             const XLSX = await import('xlsx');
             const wb = XLSX.utils.book_new();
             const filterName = { all: '전체', confirmed: 'CBM확정', semi: 'CBM준확정', estimated: 'CBM추정' }[cbmFilter] || '전체';
-            const headers = ['확인완료','SKU','상품명','개별CBM','출고횟수','총수량','단가(CNY)','원가(개당)','가중평균원가','최소대비(%)','원가편차','원가(x285)','차이',...costLabels];
+            const headers = ['확인완료','확정일','SKU','상품명','개별CBM','출고횟수','총수량','단가(CNY)','원가(개당)','가중평균원가','최소대비(%)','원가편차','원가(x285)','차이',...costLabels];
             const wsData = [headers, ...filtered.map(r => [
-              confirmedSkus.has(r.sku) ? '확인완료' : '', r.sku, r.labelName || r.productName, r.cbmPerUnit || 0, r.shipCount, r.shippedQty, r.unitPriceCny,
+              needsRecheckSkus.has(r.sku) ? '재확인필요' : confirmedSkus[r.sku] ? '확인완료' : '',
+              confirmedSkus[r.sku] ? confirmedSkus[r.sku].confirmedAt.slice(0,10) : '',
+              r.sku, r.labelName || r.productName, r.cbmPerUnit || 0, r.shipCount, r.shippedQty, r.unitPriceCny,
               r.costPerUnit, r.avgCost, r.avgVsMin, r.costRange, r.costX285, r.costDiff,
               ...costKeys.map(k => r.costs?.[k]?.perUnit || 0),
             ])];
@@ -484,8 +519,8 @@ export default function ConfirmedCbmPage() {
           {cbmFilter !== 'all' && cbmFilter !== 'estimated' && (<>
           <button onClick={() => {
             const candidates = cbmFilter === 'semi'
-              ? filtered.filter(r => !confirmedSkus.has(r.sku) && r.shipCount >= 2 && r.costRange <= 300)
-              : filtered.filter(r => !confirmedSkus.has(r.sku) && r.shipCount >= 2 && r.costRange <= 300 && r.cbmConfirmed !== false);
+              ? filtered.filter(r => (!confirmedSkus[r.sku] || needsRecheckSkus.has(r.sku)) && r.shipCount >= 2 && r.costRange <= 300)
+              : filtered.filter(r => (!confirmedSkus[r.sku] || needsRecheckSkus.has(r.sku)) && r.shipCount >= 2 && r.costRange <= 300 && r.cbmConfirmed !== false);
             if (candidates.length === 0) { alert('조건에 맞는 SKU가 없습니다.'); return; }
             setRecommendedSkus(new Set(candidates.map(r => r.sku)));
             setShowRecommend(true);
@@ -499,7 +534,7 @@ export default function ConfirmedCbmPage() {
           </button>
           {cbmFilter !== 'semi' && (
           <button onClick={() => {
-            const candidates = filtered.filter(r => !confirmedSkus.has(r.sku) && r.shipCount === 1 && r.totalBoxCount >= 2 && r.uniformBoxQty);
+            const candidates = filtered.filter(r => (!confirmedSkus[r.sku] || needsRecheckSkus.has(r.sku)) && r.shipCount === 1 && r.totalBoxCount >= 2 && r.uniformBoxQty);
             if (candidates.length === 0) { alert('조건에 맞는 SKU가 없습니다.'); return; }
             setRecommendedSkus(new Set(candidates.map(r => r.sku)));
             setShowRecommend(true);
@@ -515,7 +550,7 @@ export default function ConfirmedCbmPage() {
           </>)}
           {cbmFilter === 'estimated' && (
           <button onClick={() => {
-            const candidates = filtered.filter(r => !confirmedSkus.has(r.sku) && r.shipCount >= 2 && r.costRange <= 300);
+            const candidates = filtered.filter(r => (!confirmedSkus[r.sku] || needsRecheckSkus.has(r.sku)) && r.shipCount >= 2 && r.costRange <= 300);
             if (candidates.length === 0) { alert('조건에 맞는 SKU가 없습니다.'); return; }
             setRecommendedSkus(new Set(candidates.map(r => r.sku)));
             setShowRecommend(true);
@@ -572,7 +607,12 @@ export default function ConfirmedCbmPage() {
                       body: JSON.stringify({ action: 'confirm-bulk', skus }),
                     });
                     if (res.ok) {
-                      setConfirmedSkus(prev => new Set([...prev, ...skus]));
+                      const now = new Date().toISOString();
+                      setConfirmedSkus(prev => {
+                        const next = { ...prev };
+                        for (const s of skus) next[s] = { confirmedAt: now };
+                        return next;
+                      });
                       setRecommendedSkus(new Set());
                       setShowRecommend(false);
                     }
@@ -634,21 +674,34 @@ export default function ConfirmedCbmPage() {
                     <tr className="bg-gray-100">
                       <td className="px-3 py-2.5 text-center text-gray-400 cursor-pointer hover:text-blue-600" onClick={() => toggleExpand(expandedSku)}>▲</td>
                       <td className="px-3 py-2.5 text-center">
-                        {confirmedSkus.has(expandedSku) ? (
+                        {confirmedSkus[expandedSku] && !needsRecheckSkus.has(expandedSku) ? (
                           <span className="text-[10px] font-bold text-green-600 whitespace-nowrap">확인완료</span>
+                        ) : needsRecheckSkus.has(expandedSku) ? (
+                          <button onClick={() => toggleConfirmSku(expandedSku)} className="text-[10px] font-bold text-orange-500 whitespace-nowrap hover:text-orange-700 cursor-pointer" title="새 출고건 추가됨 — 클릭하여 재확인">재확인</button>
                         ) : (
                           <input type="checkbox" checked={false} onChange={() => toggleConfirmSku(expandedSku)} className="w-4 h-4 cursor-pointer accent-blue-600" />
                         )}
                       </td>
+                      <td className="px-3 py-2.5 text-center text-[10px] text-gray-500 whitespace-nowrap">{confirmedSkus[expandedSku] ? fmtDate(confirmedSkus[expandedSku].confirmedAt) : ''}</td>
                       <td colSpan={999} className="px-3 py-2.5 font-bold text-sm">
                         {expandedSku} — {skuGroups[expandedSku]?.labelName} ({skuGroups[expandedSku]?.rows.length}건)
                       </td>
                     </tr>
                     <tr className="h-0"><td colSpan={999} className="p-0 border-t-2 border-blue-300"></td></tr>
-                    {skuGroups[expandedSku]?.rows.map((sub, j) => (
+                    {(() => {
+                      const rows = skuGroups[expandedSku]?.rows || [];
+                      const sorted = [...rows].sort((a, b) => (a.shipmentKey || '').localeCompare(b.shipmentKey || ''));
+                      // 가장 마지막 파일 키 찾기
+                      let latestKey = null, latestSavedAt = '';
+                      for (const [key, entry] of Object.entries(allData)) {
+                        if (entry.savedAt && entry.savedAt > latestSavedAt) { latestSavedAt = entry.savedAt; latestKey = key; }
+                      }
+                      return sorted.map((sub, j) => {
+                        const isNew = sub.shipmentKey === latestKey;
+                        return (
                     <React.Fragment key={j}>
-                      <tr className={`${j % 2 === 0 ? 'bg-white' : 'bg-blue-50/30'} ${sub._excluded ? 'opacity-40' : ''}`}>
-                        <td className="px-3 py-2"></td>
+                      <tr className={`${isNew ? 'bg-orange-50 border-l-4 border-orange-400' : j % 2 === 0 ? 'bg-white' : 'bg-blue-50/30'} ${sub._excluded ? 'opacity-40' : ''}`}>
+                        <td className="px-3 py-2 text-center">{isNew && <span className="text-[10px] font-bold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">NEW</span>}</td>
                         <td className="px-3 py-2 text-center whitespace-nowrap">
                           {(() => {
                             const key = `${sub.sku}__${sub.shipmentKey}`;
@@ -703,7 +756,9 @@ export default function ConfirmedCbmPage() {
                         </tr>
                       )}
                     </React.Fragment>
-                    ))}
+                        );
+                      });
+                    })()}
                     {/* 비교 분석 섹션 */}
                     {(() => {
                       const sku = expandedSku;
@@ -1060,12 +1115,15 @@ export default function ConfirmedCbmPage() {
                       <tr key={i} className={`${showRecommend && recommendedSkus.has(row.sku) ? 'bg-yellow-100' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
                         <td className={`px-3 py-2.5 text-center text-gray-400 ${hasMultiple ? 'cursor-pointer hover:text-blue-600' : ''}`} onClick={() => hasMultiple && toggleExpand(row.sku)}>{hasMultiple ? '▼' : ''}</td>
                         <td className="px-3 py-2 text-center" onClick={e => e.stopPropagation()}>
-                          {confirmedSkus.has(row.sku) ? (
+                          {confirmedSkus[row.sku] && !needsRecheckSkus.has(row.sku) ? (
                             <span className="text-[10px] font-bold text-green-600 whitespace-nowrap">확인완료</span>
+                          ) : needsRecheckSkus.has(row.sku) ? (
+                            <button onClick={() => toggleConfirmSku(row.sku)} className="text-[10px] font-bold text-orange-500 whitespace-nowrap hover:text-orange-700 cursor-pointer" title="새 출고건 추가됨 — 클릭하여 재확인">재확인</button>
                           ) : (
                             <input type="checkbox" checked={false} onChange={() => toggleConfirmSku(row.sku)} className="w-4 h-4 cursor-pointer accent-blue-600" />
                           )}
                         </td>
+                        <td className="px-3 py-2 text-center text-[10px] text-gray-500 whitespace-nowrap">{confirmedSkus[row.sku] ? fmtDate(confirmedSkus[row.sku].confirmedAt) : ''}</td>
                         <td className={`px-3 py-2 font-mono text-xs text-center whitespace-nowrap sticky left-0 z-10 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>{row.sku}</td>
                         <td className="px-3 py-2 text-xs text-left" style={{ maxWidth: '300px', wordBreak: 'break-word' }}>{row.labelName || row.productName}</td>
                         <td className={`px-3 py-2 text-center text-xs font-semibold ${row.cbmConfirmed === false ? 'text-red-500' : ''}`}>{row.cbmPerUnit ? row.cbmPerUnit.toFixed(4) : '-'}</td>

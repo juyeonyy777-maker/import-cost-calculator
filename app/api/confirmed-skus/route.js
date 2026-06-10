@@ -4,13 +4,23 @@ import { PATHS } from '@/lib/paths';
 
 function load() {
   try {
-    if (fs.existsSync(PATHS.confirmedSkus)) return JSON.parse(fs.readFileSync(PATHS.confirmedSkus, 'utf8'));
+    if (fs.existsSync(PATHS.confirmedSkus)) {
+      const raw = JSON.parse(fs.readFileSync(PATHS.confirmedSkus, 'utf8'));
+      // 기존 배열 형식 → 객체 형식 마이그레이션
+      if (Array.isArray(raw)) {
+        const obj = {};
+        for (const sku of raw) obj[sku] = { confirmedAt: '2026-04-17T00:00:00.000Z' };
+        save(obj);
+        return obj;
+      }
+      return raw;
+    }
   } catch (e) {}
-  return [];
+  return {};
 }
 
 function save(data) {
-  fs.writeFileSync(PATHS.confirmedSkus, JSON.stringify(data), 'utf8');
+  fs.writeFileSync(PATHS.confirmedSkus, JSON.stringify(data, null, 2), 'utf8');
 }
 
 export async function GET() {
@@ -20,19 +30,19 @@ export async function GET() {
 export async function POST(request) {
   try {
     const { action, sku, skus } = await request.json();
-    const list = load();
-    if (action === 'confirm' && !list.includes(sku)) {
-      list.push(sku);
+    const map = load();
+    const now = new Date().toISOString();
+    if (action === 'confirm') {
+      map[sku] = { confirmedAt: now };
     } else if (action === 'confirm-bulk' && Array.isArray(skus)) {
       for (const s of skus) {
-        if (!list.includes(s)) list.push(s);
+        map[s] = { confirmedAt: now };
       }
     } else if (action === 'unconfirm') {
-      const idx = list.indexOf(sku);
-      if (idx >= 0) list.splice(idx, 1);
+      delete map[sku];
     }
-    save(list);
-    return NextResponse.json({ success: true, count: list.length });
+    save(map);
+    return NextResponse.json({ success: true, count: Object.keys(map).length });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
