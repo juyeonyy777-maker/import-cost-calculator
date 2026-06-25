@@ -269,26 +269,24 @@ export default function ConfirmedCbmPage() {
     return rows;
   }, [allData, excludedKeys]);
 
-  // 재확인 필요: 가장 마지막에 넣은 파일에 포함된 확정 SKU만
+  // 재확인 필요: confirmedAt 이후에 savedAt인 출고 파일에 해당 SKU가 포함되면 재확인
   const needsRecheckSkus = useMemo(() => {
     const set = new Set();
-    // 가장 최근 savedAt인 출고파일 찾기
-    let latestKey = null, latestSavedAt = '';
-    for (const [key, entry] of Object.entries(allData)) {
-      if (entry.savedAt && entry.savedAt > latestSavedAt) {
-        latestSavedAt = entry.savedAt;
-        latestKey = key;
+    // 파일별 SKU 목록 미리 구성
+    const fileSkus = [];
+    for (const [, entry] of Object.entries(allData)) {
+      if (!entry.rows || !entry.savedAt) continue;
+      const skus = new Set(entry.rows.map(r => r.sku).filter(Boolean));
+      fileSkus.push({ savedAt: entry.savedAt, skus });
+    }
+    for (const [sku, info] of Object.entries(confirmedSkus)) {
+      if (!info.confirmedAt) continue;
+      for (const f of fileSkus) {
+        if (f.savedAt > info.confirmedAt && f.skus.has(sku)) { set.add(sku); break; }
       }
     }
-    if (!latestKey || !allData[latestKey]?.rows) return set;
-    // 마지막 파일에 포함된 SKU 목록
-    const latestSkus = new Set(allData[latestKey].rows.map(r => r.sku).filter(Boolean));
-    // 그 중 이미 확정된 SKU만 재확인
-    for (const sku of latestSkus) {
-      if (confirmedSkus[sku]) set.add(sku);
-    }
     return set;
-  }, [allRows, confirmedSkus, allData]);
+  }, [confirmedSkus, allData]);
 
   const skuGroups = useMemo(() => {
     const groups = {};
@@ -343,7 +341,10 @@ export default function ConfirmedCbmPage() {
     if (sortKey && sortDir) {
       result = [...result].sort((a, b) => {
         let va, vb;
-        if (sortKey.startsWith('cost_')) {
+        if (sortKey === 'confirmedDate') {
+          va = confirmedSkus[a.sku]?.confirmedAt || '';
+          vb = confirmedSkus[b.sku]?.confirmedAt || '';
+        } else if (sortKey.startsWith('cost_')) {
           const ck = sortKey.replace('cost_', '');
           va = a.costs?.[ck]?.perUnit || 0;
           vb = b.costs?.[ck]?.perUnit || 0;
